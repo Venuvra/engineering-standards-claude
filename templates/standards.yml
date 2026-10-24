@@ -1,0 +1,114 @@
+# Venuvra engineering standards. Installed by `vstd init`; don't edit by hand.
+# The tool and rules come from the release pinned in .venuvra/standards.toml,
+# so upgrades change that file only, never this workflow.
+name: standards
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1" # weekly sync proposal, Monday 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print the diff only
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standards-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CENTRAL: Venuvra/engineering-standards-claude
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read and verify the pinned release
+        id: pin
+        run: |
+          python3 -I - <<'EOF'
+          import os, re, subprocess, tomllib
+          with open(".venuvra/standards.toml", "rb") as f:
+              cfg = tomllib.load(f)
+          version, commit = str(cfg.get("version", "")), str(cfg.get("commit", ""))
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+              raise SystemExit("::error file=.venuvra/standards.toml::version or commit is not valid")
+          url = f"https://github.com/{os.environ['CENTRAL']}.git"
+          out = subprocess.run(["git", "ls-remote", "--tags", url, f"refs/tags/v{version}", f"refs/tags/v{version}^{{}}"],
+                               capture_output=True, text=True, check=True, timeout=60).stdout.split()
+          refs = dict(zip(out[1::2], out[0::2]))
+          tagged = refs.get(f"refs/tags/v{version}^{{}}") or refs.get(f"refs/tags/v{version}")
+          if tagged != commit:
+              raise SystemExit(f"::error file=.venuvra/standards.toml::v{version} is {tagged}, not the pinned commit {commit}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"commit={commit}\n")
+          EOF
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.CENTRAL }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: .vstd
+          persist-credentials: false
+      - name: vstd check
+        run: python3 -I .vstd/vstd/main.py check --repo .
+
+  sync:
+    if: >-
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && github.repository_owner == 'Venuvra'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # push the standards/update branch in THIS repo only
+      pull-requests: write # open or update the PR
+      statuses: write # report standards/check on the PR head
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read and verify the pinned release
+        id: pin
+        run: |
+          python3 -I - <<'EOF'
+          import os, re, subprocess, tomllib
+          with open(".venuvra/standards.toml", "rb") as f:
+              cfg = tomllib.load(f)
+          version, commit = str(cfg.get("version", "")), str(cfg.get("commit", ""))
+          if not re.fullmatch(r"\d+\.\d+\.\d+", version) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+              raise SystemExit("::error file=.venuvra/standards.toml::version or commit is not valid")
+          url = f"https://github.com/{os.environ['CENTRAL']}.git"
+          out = subprocess.run(["git", "ls-remote", "--tags", url, f"refs/tags/v{version}", f"refs/tags/v{version}^{{}}"],
+                               capture_output=True, text=True, check=True, timeout=60).stdout.split()
+          refs = dict(zip(out[1::2], out[0::2]))
+          tagged = refs.get(f"refs/tags/v{version}^{{}}") or refs.get(f"refs/tags/v{version}")
+          if tagged != commit:
+              raise SystemExit(f"::error file=.venuvra/standards.toml::v{version} is {tagged}, not the pinned commit {commit}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"commit={commit}\n")
+          EOF
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.CENTRAL }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: .vstd
+          persist-credentials: false
+      - name: vstd sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          set -- sync --repo .
+          if [ "$DRY_RUN" = "true" ]; then set -- "$@" --dry-run; fi
+          python3 -I .vstd/vstd/main.py "$@"

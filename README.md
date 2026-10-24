@@ -30,6 +30,24 @@ It reads `GH_TOKEN` and `GITHUB_REPOSITORY` from the environment and talks only 
 `api.github.com` and `github.com`. The token is never passed to the target release's code,
 never put on a command line, and never logged.
 
+## Workflows
+
+- `templates/standards.yml` is the workflow `vstd init` installs in each repository. The
+  `check` job runs on PRs and pushes with `contents: read`; the `sync` job runs weekly or
+  by hand. Both read `version` and `commit` from `.venuvra/standards.toml`, confirm with
+  `git ls-remote` that tag `v<version>` points at `commit`, and check this public repo out
+  at that commit with no credentials. Upgrades only change `standards.toml`, so the
+  workflow file never needs the `workflows` permission that `GITHUB_TOKEN` lacks.
+- `.github/workflows/release.yml` runs when a `vX.Y.Z` tag is pushed. It checks that the
+  tag is on `main`, matches `vstd/__init__.py` and has a green `ci` check, re-runs the
+  tests, and publishes the release with the tag's `CHANGELOG.md` section. It never
+  creates or moves tags.
+- `vstd lint-workflows` checks our workflows in CI: no `pull_request_target` or
+  `workflow_run`, explicit top-level `permissions` (never `write-all`), every `uses:`
+  pinned to a full SHA, and no `${{ }}` inside `run:` (values go through `env:`). Python
+  has no standard YAML parser, so it matches known patterns line by line. It is meant for
+  these files, not as a general YAML linter.
+
 ## Development
 
 ```sh
