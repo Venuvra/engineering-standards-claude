@@ -1,0 +1,5 @@
+# Rule IDs removed from the standards. IDs are never reused; removing one is a MAJOR release.
+# [[retired]]
+# id = "SEC-099"
+# removed_in = "2.0.0"
+# reason = "Merged into SEC-003"
