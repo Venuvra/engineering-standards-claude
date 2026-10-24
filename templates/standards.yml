@@ -28,6 +28,8 @@ env:
 
 jobs:
   check:
+    # Same name as the commit status sync sets, so one required check covers both.
+    name: standards/check
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
