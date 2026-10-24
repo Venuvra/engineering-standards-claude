@@ -1,5 +1,6 @@
 """Safe writer tests (AC-05, AC-08) and refusal cases."""
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -105,6 +106,29 @@ class WriterTest(_RepoCase):
         self.write("web/AGENTS.md", "x\n")
         self.sync()
         self.assertFalse((self.repo / "web/CLAUDE.md").exists())
+
+
+class ReviewRegressionTest(_RepoCase):
+    def test_apply_keeps_existing_file_mode(self):
+        self.write("AGENTS.md", "# notes\n")
+        os.chmod(self.repo / "AGENTS.md", 0o644)
+        writer.apply(self.repo, writer.plan(self.repo, RULES, V1))
+        self.assertEqual(os.stat(self.repo / "AGENTS.md").st_mode & 0o777, 0o644)
+
+    def test_new_files_are_not_private(self):
+        writer.apply(self.repo, writer.plan(self.repo, RULES, V1))
+        mode = os.stat(self.repo / "CLAUDE.md").st_mode & 0o777
+        self.assertEqual(mode, 0o666 & ~writer._umask())
+
+    def test_symlinked_dot_claude_is_ignored_when_root_claude_exists(self):
+        outside = tempfile.TemporaryDirectory()
+        self.addCleanup(outside.cleanup)
+        (Path(outside.name) / "CLAUDE.md").write_text("shared\n")
+        (self.repo / ".claude").symlink_to(outside.name)
+        self.write("CLAUDE.md", "notes\n")
+        paths = [c.path for c in writer.plan(self.repo, RULES, V1)]
+        self.assertIn("CLAUDE.md", paths)
+        self.assertNotIn(".claude/CLAUDE.md", paths)
 
 
 class RefusalTest(_RepoCase):

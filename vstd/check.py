@@ -135,10 +135,11 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
     if root_claude is None and dot_claude is None and not report.refused & {"CLAUDE.md", ".claude/CLAUDE.md"}:
         report.error("CLAUDE.md", "missing, so Claude Code gets no shared rules", _SYNC_FIX)
     for rel, text, expected in (("CLAUDE.md", root_claude, "@AGENTS.md"), (".claude/CLAUDE.md", dot_claude, "@../AGENTS.md")):
-        if text is None or (rel == ".claude/CLAUDE.md" and root_claude is not None):
+        if text is None:
             continue
+        # The import is required only in the wrapper vstd manages; content checks apply to every file Claude loads.
         first = text.splitlines()[0].strip() if text.strip() else ""
-        if first != expected:
+        if first != expected and not (rel == ".claude/CLAUDE.md" and root_claude is not None):
             report.error(rel, f"line 1 must be '{expected}' so Claude Code loads the shared rules", _SYNC_FIX)
         if rule_line.search(text):
             report.error(rel, "contains rule ID lines; shared rules belong only in the AGENTS.md block", "delete those lines; Claude Code already gets them through the import")

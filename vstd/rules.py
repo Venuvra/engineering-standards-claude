@@ -115,9 +115,11 @@ def _read_text(path: Path) -> str:
     if len(data) > MAX_FILE_BYTES:
         raise RuleError(path, None, f"file is larger than {MAX_FILE_BYTES} bytes")
     try:
-        return data.decode("utf-8")
+        text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise RuleError(path, None, f"not valid UTF-8: {exc}") from None
+    # A Windows checkout may convert line endings; parse and render the same either way.
+    return text.replace("\r\n", "\n")
 
 
 def parse_profile(path: Path | str, text: str, expected_name: str | None = None) -> Profile:
@@ -221,6 +223,8 @@ def load_rules(root: Path | str) -> RuleSet:
         for path in sorted(folder.iterdir()):
             if path.suffix != ".md":
                 raise RuleError(path, None, "only .md rule files belong here")
+            if kind == "core" and path.stem not in CORE_ORDER:
+                raise RuleError(path, None, f"unknown core profile '{path.stem}'; core profiles are {', '.join(CORE_ORDER)}")
             profile = parse_profile(path, _read_text(path), f"{kind}/{path.stem}")
             if profile.prefix in prefixes:
                 raise RuleError(path, 2, f"prefix '{profile.prefix}' is already used by {prefixes[profile.prefix]}")
