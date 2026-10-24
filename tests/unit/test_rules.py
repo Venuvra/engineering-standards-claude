@@ -114,11 +114,23 @@ class LoadRulesTest(unittest.TestCase):
     def test_prefix_used_twice(self):
         write_tree(self.root, {
             "core/security.md": GOOD,
-            "core/other.md": GOOD.replace("core/security", "core/other").replace("SEC-00", "SEC-01"),
+            "core/testing.md": GOOD.replace("core/security", "core/testing").replace("SEC-00", "SEC-01"),
         })
         with self.assertRaises(RuleError) as ctx:
             load_rules(self.root)
         self.assertIn("already used", str(ctx.exception))
+
+    def test_unknown_core_profile_rejected(self):
+        write_tree(self.root, {"core/other.md": GOOD.replace("core/security", "core/other")})
+        with self.assertRaises(RuleError) as ctx:
+            load_rules(self.root)
+        self.assertIn("unknown core profile 'other'", str(ctx.exception))
+
+    def test_crlf_rule_file_loads_like_lf(self):
+        write_tree(self.root, {"core/security.md": GOOD})
+        lf = load_rules(self.root)
+        (self.root / "core" / "security.md").write_bytes(GOOD.replace("\n", "\r\n").encode())
+        self.assertEqual(load_rules(self.root).rules, lf.rules)
 
     def test_non_markdown_file_rejected(self):
         write_tree(self.root, {"core/notes.txt": "hello"})
