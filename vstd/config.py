@@ -146,8 +146,8 @@ def validate(data: dict, ruleset: RuleSet, today: dt.date | None = None) -> Conf
                 errors.append(f"{label}: '{key}' must be a TOML date like 2026-11-02")
         if isinstance(raw.get("approved_by"), str) and raw["approved_by"].strip() and not _LOGIN_RE.match(raw["approved_by"]):
             errors.append(f"{label}: 'approved_by' must be a GitHub login")
-        for key in ("replacement", "reason"):
-            if isinstance(raw.get(key), str) and ("<!--" in raw[key] or "-->" in raw[key] or "\n" in raw[key]):
+        for key in ("replacement", "reason", "scope"):
+            if isinstance(raw.get(key), str) and ("<!--" in raw[key] or "-->" in raw[key] or "\n" in raw[key] or "\r" in raw[key]):
                 errors.append(f"{label}: '{key}' must be one line without HTML comment markers")
 
         if isinstance(rule_id, str):
@@ -162,8 +162,9 @@ def validate(data: dict, ruleset: RuleSet, today: dt.date | None = None) -> Conf
                 stack = ruleset.stack_of(rule_id)
                 if stack is not None and stack not in stack_list:
                     errors.append(f"{label}: {rule_id} belongs to stack '{stack}', which this repo does not list")
-            key = (rule_id, raw.get("scope"))
-            if key in seen:
+            scope = raw.get("scope")
+            key = (rule_id, scope if isinstance(scope, str) else None)
+            if key in seen and (scope is None or isinstance(scope, str)):
                 errors.append(f"{label}: duplicate override for the same rule and scope")
             seen.add(key)
 
