@@ -1,0 +1,21 @@
+# Venuvra engineering standards for this repository.
+# Reference: https://github.com/Venuvra/engineering-standards-claude#readme
+# Change stacks or overrides here, never the managed block in AGENTS.md.
+schema = 1
+version = "$version"
+commit = "$commit"
+# patch | minor | manual. A new major always needs a manual change of version and commit.
+upgrade = "minor"
+stacks = [$stacks]
+# Set to true to add a CLAUDE.md next to every nested AGENTS.md so Claude Code reads it too.
+nested_parity = false
+
+# A SHOULD rule can be overridden with a reason and an approver; MUST rules can't.
+# [[overrides]]
+# rule = "TS-004"
+# scope = "legacy/"
+# replacement = "This folder still uses npm until the migration finishes."
+# reason = "Migration tracked in #123"
+# approved_by = "kurtrusselsilla"
+# approved_on = 2026-10-24
+# expires = 2027-01-31
