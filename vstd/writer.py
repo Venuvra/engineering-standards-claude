@@ -97,11 +97,13 @@ def plan_agents_md(repo: Path, ruleset: RuleSet, config: Config) -> Change | Non
 
 def plan_claude_md(repo: Path) -> Change | None:
     root = _read(repo, "CLAUDE.md")
-    dot = _read(repo, ".claude/CLAUDE.md")
-    if root is None and dot is not None:
-        new = _with_import(dot, "@../AGENTS.md")
-        return None if new == dot else Change(".claude/CLAUDE.md", dot, new)
     if root is None:
+        # Only look at .claude/ when it is the file we'd change; a symlinked .claude
+        # next to a real CLAUDE.md is none of our business.
+        dot = _read(repo, ".claude/CLAUDE.md")
+        if dot is not None:
+            new = _with_import(dot, "@../AGENTS.md")
+            return None if new == dot else Change(".claude/CLAUDE.md", dot, new)
         return Change("CLAUDE.md", None, CLAUDE_MD)
     new = _with_import(root, CLAUDE_IMPORT)
     return None if new == root else Change("CLAUDE.md", root, new)
@@ -131,6 +133,12 @@ def plan_nested_parity(repo: Path) -> list[Change]:
     return changes
 
 
+def _umask() -> int:
+    current = os.umask(0)
+    os.umask(current)
+    return current
+
+
 def plan(repo: Path | str, ruleset: RuleSet, config: Config) -> list[Change]:
     repo = Path(repo)
     changes = [c for c in (plan_agents_md(repo, ruleset, config), plan_claude_md(repo)) if c]
@@ -152,10 +160,13 @@ def apply(repo: Path | str, changes: list[Change]) -> None:
         if current != c.old:
             raise WriterError(f"{c.path}: changed since it was read; re-run")
         path.parent.mkdir(parents=True, exist_ok=True)
+        # mkstemp creates 0600; keep an existing file's mode, else use the umask default.
+        mode = path.stat().st_mode & 0o777 if path.exists() else 0o666 & ~_umask()
         fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".vstd-", suffix=".tmp")
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
                 fh.write(c.new)
+            os.chmod(tmp, mode)
             os.replace(tmp, path)
         except BaseException:
             if os.path.exists(tmp):
