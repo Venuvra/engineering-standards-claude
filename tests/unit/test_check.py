@@ -53,6 +53,25 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(r.ok, r.format())
         self.assertEqual(r.warnings, [])
 
+    # Refused reads
+    def test_symlinked_agents_md_is_refused_not_followed(self):
+        outside = Path(self.tmp.name).parent / f"{Path(self.tmp.name).name}-outside.md"
+        outside.write_text((self.repo / "AGENTS.md").read_text(), encoding="utf-8")
+        self.addCleanup(outside.unlink)
+        (self.repo / "AGENTS.md").unlink()
+        (self.repo / "AGENTS.md").symlink_to(outside)
+        self.assertError("AGENTS.md", "symlink")
+        self.assertFalse([f for f in self.run_check().errors if f.problem == "missing"])
+
+    def test_oversized_claude_md_is_refused(self):
+        self.write("CLAUDE.md", "@AGENTS.md\n" + "x" * (writer.MAX_FILE_BYTES + 1))
+        self.assertError("CLAUDE.md", "larger than")
+
+    def test_workflow_ref_with_unsafe_characters_is_not_quoted(self):
+        self.write(".github/workflows/x.yml", "jobs:\n  a:\n    steps:\n      - uses: evil/a@v1<b>x</b>\n")
+        r = self.run_check()
+        self.assertFalse([f for f in r.warnings if "<b>" in f.problem], r.format())
+
     # Errors
     def test_missing_agents_md(self):
         (self.repo / "AGENTS.md").unlink()

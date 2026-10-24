@@ -21,7 +21,7 @@ BLOCK_BUDGET = 16 * 1024
 AGENTS_BUDGET = 24 * 1024
 _SYNC_FIX = "run the standards workflow manually, or 'vstd sync' locally, and merge the PR"
 _TRIPWIRE = re.compile(r"\b(ignore|ignored|skip|skipped|disable|disabled|except|exempt|override|overridden|does not apply|doesn't apply|n/a)\b", re.I)
-_USES = re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?(?P<ref>[^\s'\"#]+)")
+_USES = re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?(?P<ref>[A-Za-z0-9._/@:-]+)")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -39,6 +39,7 @@ class Finding:
 class Report:
     errors: list[Finding] = field(default_factory=list)
     warnings: list[Finding] = field(default_factory=list)
+    refused: set[str] = field(default_factory=set)
 
     @property
     def ok(self) -> bool:
@@ -57,11 +58,14 @@ class Report:
         return "\n".join(lines)
 
 
-def _read(repo: Path, rel: str) -> str | None:
-    p = repo / rel
-    if not p.is_file():
+def _read(repo: Path, rel: str, report: Report) -> str | None:
+    """Read a file the way the writer would; a refused file becomes an error finding."""
+    try:
+        return writer._read(repo, rel)
+    except writer.WriterError as exc:
+        report.error(rel, str(exc).split(": ", 1)[-1], "replace it with a regular UTF-8 file inside the repository")
+        report.refused.add(rel)
         return None
-    return p.read_bytes().decode("utf-8", errors="replace")
 
 
 def _walk(repo: Path):
@@ -97,10 +101,11 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
     must_ids = {r.id for r in ruleset.rules.values() if r.locked}
 
     # AGENTS.md and its managed block.
-    agents = _read(repo, "AGENTS.md")
+    agents = _read(repo, "AGENTS.md", report)
     block = None
     if agents is None:
-        report.error("AGENTS.md", "missing", _SYNC_FIX)
+        if "AGENTS.md" not in report.refused:
+            report.error("AGENTS.md", "missing", _SYNC_FIX)
     else:
         try:
             block = find_block(agents)
@@ -123,11 +128,11 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
         _tripwire(report, "AGENTS.md", outside, must_ids)
 
     # CLAUDE.md wrapper.
-    root_claude = _read(repo, "CLAUDE.md")
-    dot_claude = _read(repo, ".claude/CLAUDE.md")
+    root_claude = _read(repo, "CLAUDE.md", report)
+    dot_claude = _read(repo, ".claude/CLAUDE.md", report)
     if root_claude is not None and dot_claude is not None:
         report.warn("CLAUDE.md", "both CLAUDE.md and .claude/CLAUDE.md exist; Claude Code loads both", "merge them into one file")
-    if root_claude is None and dot_claude is None:
+    if root_claude is None and dot_claude is None and not report.refused & {"CLAUDE.md", ".claude/CLAUDE.md"}:
         report.error("CLAUDE.md", "missing, so Claude Code gets no shared rules", _SYNC_FIX)
     for rel, text, expected in (("CLAUDE.md", root_claude, "@AGENTS.md"), (".claude/CLAUDE.md", dot_claude, "@../AGENTS.md")):
         if text is None or (rel == ".claude/CLAUDE.md" and root_claude is not None):
@@ -148,7 +153,7 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
             report.warn(f"{here}AGENTS.md", "nested AGENTS.md (project-owned; Codex loads it only when started in this directory)", "set nested_parity = true so Claude Code loads it too")
         if rel.parts[:2] == (".claude", "rules"):
             for name in filenames:
-                if name.endswith(".md") and rule_line.search(_read(repo, f"{here}{name}") or ""):
+                if name.endswith(".md") and rule_line.search(_read(repo, f"{here}{name}", report) or ""):
                     report.error(f"{here}{name}", "contains rule ID lines; Codex has no equivalent of .claude/rules", "keep shared rules in the AGENTS.md block only")
 
     # Anything sync would still change (stacks, overrides, nested parity, import).
@@ -179,9 +184,10 @@ def _check_workflow_pins(repo: Path, report: Report) -> None:
     if not wf.is_dir():
         return
     for path in sorted(wf.iterdir()):
-        if path.suffix not in (".yml", ".yaml") or not path.is_file():
+        if path.suffix not in (".yml", ".yaml") or path.is_symlink() or not path.is_file():
             continue
-        for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+        text = _read(repo, f".github/workflows/{path.name}", report)
+        for n, line in enumerate((text or "").splitlines(), start=1):
             m = _USES.match(line)
             if not m:
                 continue
