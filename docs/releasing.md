@@ -17,7 +17,8 @@ Rule IDs are never reused. A removed rule's ID goes into `rules/retired.toml`.
 
 1. In a PR: set `__version__` in `vstd/__init__.py` to `X.Y.Z` and turn `## Unreleased`
    in `CHANGELOG.md` into `## vX.Y.Z`. List rule IDs added, changed and removed, and start
-   any breaking line with `BREAKING:`. Re-render this repo's `AGENTS.md`
+   any breaking line with `BREAKING:`. Set `version = "X.Y.Z"` in this repo's
+   `.venuvra/standards.toml` (its `commit` stays zeroed). Then re-render this repo's `AGENTS.md`
    (`python3 -I vstd/main.py sync --local --repo .`) and update the golden files if the output changed.
 2. Merge after `ci` is green.
 3. Tag the merge commit: `git tag vX.Y.Z <sha> && git push origin vX.Y.Z`.
