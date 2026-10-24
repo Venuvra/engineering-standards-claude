@@ -20,6 +20,7 @@ from vstd import __version__  # noqa: E402
 from vstd import config as config_mod  # noqa: E402
 from vstd import sync as sync_mod  # noqa: E402
 from vstd import writer  # noqa: E402
+from vstd.lint import lint_paths  # noqa: E402
 from vstd.check import check  # noqa: E402
 from vstd.github import GitHubError  # noqa: E402
 from vstd.rules import RuleError, load_rules  # noqa: E402
@@ -103,6 +104,14 @@ def cmd_sync(args) -> int:
     return 0
 
 
+def cmd_lint_workflows(args) -> int:
+    errors = lint_paths([Path(p) for p in args.paths])
+    for e in errors:
+        print(f"ERROR {e}")
+    print(f"lint-workflows: {'FAILED' if errors else 'OK'} ({len(errors)} error(s))")
+    return 1 if errors else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vstd", description="Venuvra engineering standards")
     parser.add_argument("--version", action="version", version=f"vstd {__version__}")
@@ -116,6 +125,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--local", action="store_true", help="only render this release into --repo's working tree")
     p.add_argument("--base", help="base branch for the PR (default: the checked-out branch)")
     p.set_defaults(func=cmd_sync)
+    p = sub.add_parser("lint-workflows", help="check workflow files against the CI security rules")
+    p.add_argument("paths", nargs="+", help="workflow files or directories")
+    p.set_defaults(func=cmd_lint_workflows)
     return parser
 
 

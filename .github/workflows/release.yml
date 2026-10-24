@@ -1,0 +1,62 @@
+name: release
+
+# Publishes a GitHub release for a vX.Y.Z tag that Kurt pushed. It verifies
+# the tag and attaches the CHANGELOG notes. It never creates, moves or deletes
+# a tag; tags are immutable (protected by a tag ruleset).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the GitHub release object only
+      checks: read # confirm ci passed on the tagged commit
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the tag
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          printf '%s\n' "$TAG" | grep -Eqx 'v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)' \
+            || { echo "::error::$TAG is not vMAJOR.MINOR.PATCH"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::$TAG is not on main"; exit 1; }
+          version=$(python3 -I -c 'import re,sys; print(re.search(r"__version__ = \"([^\"]+)\"", open("vstd/__init__.py").read())[1])')
+          [ "v$version" = "$TAG" ] || { echo "::error::vstd/__init__.py says $version, tag is $TAG"; exit 1; }
+          conclusion=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=ci" --jq '[.check_runs[].conclusion] | first // "missing"')
+          [ "$conclusion" = "success" ] || { echo "::error::ci on $GITHUB_SHA is $conclusion, not success"; exit 1; }
+      - name: Tests on the tagged commit
+        run: python3 -I -m unittest discover -s tests -t .
+      - name: Extract release notes
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          python3 -I - <<'EOF'
+          import os, re
+          tag = os.environ["TAG"]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## {re.escape(tag)}\b.*?(?=^## |\Z)", text, re.M | re.S)
+          if not m:
+              raise SystemExit(f"::error file=CHANGELOG.md::no '## {tag}' section")
+          open(os.environ["RUNNER_TEMP"] + "/notes.md", "w", encoding="utf-8").write(m[0])
+          EOF
+      - name: Publish the release
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$TAG" --verify-tag --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"

@@ -30,6 +30,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Run tests
         run: python -I -m unittest discover -s tests -t . -v
+      - name: Lint workflows and templates
+        run: python -I vstd/main.py lint-workflows .github/workflows templates/standards.yml
 
   # Single stable check name for the branch ruleset.
   ci:
@@ -39,4 +41,6 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: All test jobs passed
-        run: test "${{ needs.test.result }}" = "success"
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: test "$RESULT" = "success"
