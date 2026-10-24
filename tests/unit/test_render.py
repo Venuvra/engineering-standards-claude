@@ -95,6 +95,15 @@ class RenderPropertiesTest(unittest.TestCase):
         self.assertIn("Approved by @kurtrusselsilla on 2026-10-30, expires 2027-03-31.", block)
         self.assertIn("None.", render_block(RULES, FIXTURES["typescript"]))
 
+    def test_override_text_ending_in_a_period_gets_one_period(self):
+        o = Override(
+            rule="PY-008", scope="scripts/", replacement="Scripts may print to stdout.",
+            reason="Found in the live fixture run.", approved_by="kurtrusselsilla", approved_on=dt.date(2026, 10, 24),
+        )
+        block = render_block(RULES, Config(version="0.1.0", commit=SHA, stacks=("python",), overrides=(o,)))
+        self.assertIn("Scripts may print to stdout. Reason: Found in the live fixture run. Approved by", block)
+        self.assertNotIn("..", block)
+
     def test_block_within_budget(self):
         block = render_block(RULES, FIXTURES["multi-stack-overrides"])
         self.assertLessEqual(len(block.encode()), 16 * 1024)

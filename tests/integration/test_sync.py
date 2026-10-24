@@ -9,7 +9,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from vstd import sync
+from vstd import github, sync
 
 PROJECT = Path(__file__).resolve().parents[2]
 GIT_ID = ["-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "init.defaultBranch=main"]
@@ -27,6 +27,7 @@ class StubGitHub:
     def __init__(self):
         self.requests = []
         self.pulls = []
+        self.refuse_create = None  # a GitHub error message to answer POST /pulls with
         stub = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -47,6 +48,8 @@ class StubGitHub:
                 stub.requests.append({"method": self.command, "path": self.path, "body": body, "auth": self.headers.get("Authorization")})
                 if self.command == "GET" and "/pulls?" in self.path:
                     return self._reply(200, [p for p in stub.pulls if p["state"] == "open"])
+                if self.command == "POST" and self.path.endswith("/pulls") and stub.refuse_create:
+                    return self._reply(403, {"message": stub.refuse_create})
                 if self.command == "POST" and self.path.endswith("/pulls"):
                     pr = {"number": len(stub.pulls) + 1, "html_url": f"https://example.test/pull/{len(stub.pulls) + 1}", "state": "open", **body}
                     stub.pulls.append(pr)
@@ -227,6 +230,22 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(len(self.api.writes()), writes)
         self.assertEqual(len(self.api.pulls), 1)
         self.assertEqual(self.snapshot(), before)
+
+    def test_rerun_after_a_refused_pr_reuses_the_pushed_branch(self):
+        # ES-12 live run: the push worked, PR creation got 403 until a setting changed.
+        self.make_consumer()
+        self.api.refuse_create = "GitHub Actions is not permitted to create or approve pull requests."
+        with self.assertRaisesRegex(github.GitHubError, "HTTP 403: GitHub Actions is not permitted"):
+            self.sync()
+        branch = self.remote_branch()
+        self.assertIsNotNone(branch)
+        self.api.refuse_create = None
+        r = self.sync()
+        self.assertIsNone(r.pushed, "the branch already had the changes")
+        self.assertEqual(self.remote_branch(), branch)
+        self.assertEqual(len(self.api.pulls), 1)
+        (status,) = [x for x in self.api.requests if "/statuses/" in x["path"]]
+        self.assertTrue(status["path"].endswith(f"/statuses/{branch}"))
 
     def test_up_to_date_repo_does_nothing(self):
         self.make_consumer(upgrade="manual")

@@ -19,6 +19,8 @@ API_URL = "https://api.github.com"
 STATUS_CONTEXT = "standards/check"
 TIMEOUT_SECONDS = 30
 MAX_RESPONSE_BYTES = 1024 * 1024
+MAX_ERROR_BYTES = 16 * 1024
+MAX_ERROR_CHARS = 300
 _REPO_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]{1,100}$")
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -26,6 +28,20 @@ _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 class GitHubError(RuntimeError):
     pass
+
+
+def _api_message(exc: urllib.error.HTTPError) -> str:
+    """GitHub's own explanation (its JSON "message"), so a 403 says which setting is missing."""
+    try:
+        data = json.loads(exc.read(MAX_ERROR_BYTES))
+    except (OSError, ValueError):
+        return ""  # no usable body; the caller still reports the status code
+    message = data.get("message") if isinstance(data, dict) else None
+    if not isinstance(message, str) or not message.strip():
+        return ""
+    # One printable line, bounded, so the API can't inject log lines or annotations.
+    message = " ".join("".join(c if c.isprintable() else " " for c in message).split())
+    return f": {message[:MAX_ERROR_CHARS]}"
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -76,7 +92,7 @@ class Client:
             with _OPENER.open(req, timeout=TIMEOUT_SECONDS) as resp:
                 raw = resp.read(MAX_RESPONSE_BYTES + 1)
         except urllib.error.HTTPError as exc:
-            raise GitHubError(f"{method} {path} failed with HTTP {exc.code}") from None
+            raise GitHubError(f"{method} {path} failed with HTTP {exc.code}{_api_message(exc)}") from None
         except (urllib.error.URLError, TimeoutError) as exc:
             raise GitHubError(f"{method} {path} failed: {getattr(exc, 'reason', exc)}") from None
         if len(raw) > MAX_RESPONSE_BYTES:
