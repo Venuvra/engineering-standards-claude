@@ -74,7 +74,7 @@ class InitTest(_Repo):
     def test_workflow_passes_lint_and_uses_the_default_branch(self):
         self.init(default_branch="trunk")
         wf = (self.repo / WORKFLOW_PATH).read_text()
-        self.assertIn("    branches: [trunk]\n", wf)
+        self.assertIn('    branches: ["trunk"]\n', wf)
         self.assertEqual(lint_text(WORKFLOW_PATH, wf), [])
 
     def test_bad_branch_name_is_refused_before_writing(self):
@@ -101,6 +101,17 @@ class InitTest(_Repo):
         self.assertEqual(sorted(result.kept), sorted([".venuvra/standards.toml", WORKFLOW_PATH]))
         self.assertEqual((self.repo / WORKFLOW_PATH).read_text(), "name: ours\n")
         self.assertIn("PY-001", (self.repo / "AGENTS.md").read_text(), "renders from the kept config")
+
+    def test_numeric_branch_name_stays_a_string(self):
+        self.init(default_branch="123")
+        self.assertIn('    branches: ["123"]\n', (self.repo / WORKFLOW_PATH).read_text())
+
+    def test_kept_config_for_another_release_is_refused_before_writing(self):
+        self.write(".venuvra/standards.toml", f'schema = 1\nversion = "0.2.0"\ncommit = "{"b" * 40}"\nstacks = []\n')
+        with self.assertRaisesRegex(InitError, "pins v0.2.0 but this is v0.1.0"):
+            self.init()
+        self.assertFalse((self.repo / WORKFLOW_PATH).exists())
+        self.assertFalse((self.repo / "AGENTS.md").exists())
 
     def test_force_replaces_config_and_workflow(self):
         self.write(".venuvra/standards.toml", "junk")

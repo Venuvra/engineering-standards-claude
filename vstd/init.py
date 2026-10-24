@@ -77,7 +77,8 @@ def render_workflow(template: str, default_branch: str) -> str:
         raise InitError(f"'{default_branch}' is not a branch name init will write into a workflow")
     if template.count("    branches: [main]\n") != 1 or not template.startswith(WORKFLOW_HEADER):
         raise InitError("the workflow template is not the expected shape")
-    return template.replace("    branches: [main]\n", f"    branches: [{default_branch}]\n")
+    # Quoted, so names like 123 or null stay strings in YAML.
+    return template.replace("    branches: [main]\n", f'    branches: ["{default_branch}"]\n')
 
 
 def _write(repo: Path, rel: str, text: str) -> None:
@@ -121,6 +122,15 @@ def init(
     parsed = config_mod.parse(cfg_text, ruleset)
     if not parsed.ok:
         raise InitError("; ".join(parsed.errors))
+    if writer._safe_path(repo, cfg_rel).exists() and not force:
+        kept = config_mod.load(repo, ruleset)
+        if not kept.ok:
+            raise InitError("; ".join(kept.errors))
+        if kept.config.version != version:
+            raise InitError(
+                f"{cfg_rel} pins v{kept.config.version} but this is v{version}; "
+                f"run init from the v{kept.config.version} release, or pass --force to re-pin to v{version}"
+            )
 
     for rel, text in ((cfg_rel, cfg_text), (WORKFLOW_PATH, wf_text)):
         path = writer._safe_path(repo, rel)
