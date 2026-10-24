@@ -72,6 +72,10 @@ class CheckTest(unittest.TestCase):
         r = self.run_check()
         self.assertFalse([f for f in r.warnings if "<b>" in f.problem], r.format())
 
+    def test_rule_lines_in_second_claude_file_are_caught(self):
+        self.write(".claude/CLAUDE.md", "- [SEC-001 MUST] Never commit secrets.\n")
+        self.assertError(".claude/CLAUDE.md", "contains rule ID lines")
+
     # Errors
     def test_missing_agents_md(self):
         (self.repo / "AGENTS.md").unlink()
