@@ -20,6 +20,8 @@ from vstd import __version__  # noqa: E402
 from vstd import config as config_mod  # noqa: E402
 from vstd import sync as sync_mod  # noqa: E402
 from vstd import writer  # noqa: E402
+from vstd.eject import EjectError, eject  # noqa: E402
+from vstd.init import InitError, init  # noqa: E402
 from vstd.lint import lint_paths  # noqa: E402
 from vstd.check import check  # noqa: E402
 from vstd.github import GitHubError  # noqa: E402
@@ -112,6 +114,58 @@ def cmd_lint_workflows(args) -> int:
     return 1 if errors else 0
 
 
+def _git_out(args: list[str], cwd: Path) -> str | None:
+    import subprocess
+
+    proc = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, env=sync_mod.child_env())
+    return proc.stdout.strip() if proc.returncode == 0 else None
+
+
+def cmd_init(args) -> int:
+    if ".dev" in __version__:
+        print(f"ERROR vstd {__version__} is a development build; run init from a release checkout (vX.Y.Z)")
+        return 1
+    commit = _git_out(["rev-parse", "HEAD"], STANDARDS_ROOT)
+    if not commit or _git_out(["status", "--porcelain"], STANDARDS_ROOT):
+        print("ERROR run init from a clean git checkout of a release, so the commit can be pinned")
+        return 1
+    if f"v{__version__}" not in (_git_out(["tag", "--points-at", "HEAD"], STANDARDS_ROOT) or "").split():
+        print(f"ERROR this checkout is not tag v{__version__}; check out the release tag first")
+        return 1
+    repo = Path(args.repo)
+    branch = args.default_branch or _git_out(["symbolic-ref", "--short", "HEAD"], repo) or "main"
+    stacks = tuple(s.strip() for s in args.stacks.split(",") if s.strip()) if args.stacks is not None else None
+    try:
+        result = init(repo, load_rules(STANDARDS_ROOT / "rules"), version=__version__, commit=commit,
+                      standards_root=STANDARDS_ROOT, stacks=stacks, default_branch=branch, force=args.force)
+    except (InitError, writer.WriterError) as exc:
+        print(f"ERROR {exc}")
+        return 1
+    print(f"stacks: {', '.join(result.stacks) or 'none (core rules only)'}")
+    for rel in result.written:
+        print(f"wrote {rel}")
+    for rel in result.kept:
+        print(f"kept existing {rel} (use --force to replace it)")
+    print("Review the changes, then push them on a branch and open a PR.")
+    return 0
+
+
+def cmd_eject(args) -> int:
+    try:
+        result = eject(Path(args.repo))
+    except (EjectError, writer.WriterError) as exc:
+        print(f"ERROR {exc}")
+        return 1
+    for rel in result.written:
+        print(f"inlined the rules in {rel} (markers removed)")
+    for rel in result.removed:
+        print(f"removed {rel}")
+    for rel in result.kept:
+        print(f"kept {rel}: not installed by vstd init")
+    print("The rules are now plain text owned by this repository.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vstd", description="Venuvra engineering standards")
     parser.add_argument("--version", action="version", version=f"vstd {__version__}")
@@ -125,6 +179,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--local", action="store_true", help="only render this release into --repo's working tree")
     p.add_argument("--base", help="base branch for the PR (default: the checked-out branch)")
     p.set_defaults(func=cmd_sync)
+    p = sub.add_parser("init", help="onboard a repository (writes files for a PR you push)")
+    p.add_argument("--repo", default=".", help="repository root (default: current directory)")
+    p.add_argument("--stacks", help="comma-separated stacks (default: detected from manifests)")
+    p.add_argument("--default-branch", help="branch the check runs on for pushes (default: the checked-out branch)")
+    p.add_argument("--force", action="store_true", help="replace an existing standards.toml or standards workflow")
+    p.set_defaults(func=cmd_init)
+    p = sub.add_parser("eject", help="stop using the central standards; keep the rules as plain text")
+    p.add_argument("--repo", default=".", help="repository root (default: current directory)")
+    p.set_defaults(func=cmd_eject)
     p = sub.add_parser("lint-workflows", help="check workflow files against the CI security rules")
     p.add_argument("paths", nargs="+", help="workflow files or directories")
     p.set_defaults(func=cmd_lint_workflows)

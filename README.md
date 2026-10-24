@@ -10,6 +10,30 @@ The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 
 Under construction (milestone M1). See the issues for the plan.
 
+## Onboarding and leaving
+
+From a clean checkout of a release tag (`git checkout vX.Y.Z`):
+
+```sh
+python3 -I vstd/main.py init --repo ../my-repo            # stacks detected from manifests
+python3 -I vstd/main.py init --repo ../my-repo --stacks typescript,python
+```
+
+`init` writes `.venuvra/standards.toml`, `.github/workflows/standards.yml`, and the
+first-run `AGENTS.md` / `CLAUDE.md` into the working tree and lists every file. Existing
+`AGENTS.md` and `CLAUDE.md` content is kept. An existing config or standards workflow is
+kept unless you pass `--force`. A person pushes this first PR, because `GITHUB_TOKEN`
+can't create workflow files.
+
+Stacks are detected from manifests in the root and one folder down: `package.json`,
+`tsconfig.json` or `pnpm-lock.yaml` mean `typescript`; `pyproject.toml`, `setup.py`,
+`setup.cfg`, `Pipfile`, `requirements*.txt`, `uv.lock` or `poetry.lock` mean `python`.
+
+`eject` stops using the central standards. It removes the markers from `AGENTS.md` and
+keeps the rules as plain text, keeps `CLAUDE.md` and its `@AGENTS.md` import, and deletes
+the config and the standards workflow (a workflow not installed by `init` is kept).
+After that, `vstd check` reports the repo as not managed.
+
 ## Sync
 
 The standards workflow in each repository checks out this repo at the commit pinned in
