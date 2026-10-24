@@ -54,6 +54,8 @@ said before, then merge.
   edit of `version` and `commit`.
 - Roll back by reverting the sync PR, or set `version` and `commit` back to the earlier release
   and run sync. The generator reproduces each release byte for byte.
+- To stay on the earlier release, also set `upgrade = "manual"`. Otherwise the next weekly
+  sync proposes the newer release again.
 
 ## 5. Checking what each assistant loaded
 
