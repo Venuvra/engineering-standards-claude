@@ -11,4 +11,5 @@ wording only. Tags `vX.Y.Z` are immutable.
 ## Unreleased
 
 - Rules: core (AGT, ENG, SEC, TST, DOC, GIT), stacks `typescript` (TS) and `python` (PY).
-- `vstd check`, `vstd sync` (`--dry-run`, `--local`).
+- `vstd check`, `vstd sync` (`--dry-run`, `--local`), `vstd init`, `vstd eject`, `vstd lint-workflows`.
+- Workflow template `templates/standards.yml` and `release.yml`.

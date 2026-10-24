@@ -32,6 +32,8 @@ jobs:
         run: python -I -m unittest discover -s tests -t . -v
       - name: Lint workflows and templates
         run: python -I vstd/main.py lint-workflows .github/workflows templates/standards.yml
+      - name: Check this repo against its own standards
+        run: python -I vstd/main.py check --repo .
 
   # Single stable check name for the branch ruleset.
   ci:

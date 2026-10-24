@@ -6,9 +6,17 @@ the same file through a one-line `@AGENTS.md` import in `CLAUDE.md`.
 
 The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 
+## Docs
+
+- [Adopting the standards in a repository](docs/adopting.md)
+- [Overrides](docs/overrides.md)
+- [Releasing](docs/releasing.md)
+- [Changelog](CHANGELOG.md)
+
 ## Status
 
-Under construction (milestone M1). See the issues for the plan.
+Milestone M1: core rules plus the TypeScript and Python stacks, `vstd check`, `sync`,
+`init`, `eject` and `lint-workflows`. Not yet released.
 
 ## Onboarding and leaving
 
@@ -75,5 +83,9 @@ never put on a command line, and never logged.
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests -t .
+python3 -I -m unittest discover -s tests -t .
+python3 -I vstd/main.py check --repo .
+python3 -I vstd/main.py lint-workflows .github/workflows templates/standards.yml
 ```
+
+This repository follows its own standards: see [AGENTS.md](AGENTS.md).

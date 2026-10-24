@@ -1,0 +1,8 @@
+# This repository's own standards. It renders from its working tree (`vstd sync --local`)
+# rather than syncing from a tag, so `commit` stays zeroed: there is no release to pin
+# for the commit being built. Every other repository pins a real release commit.
+schema = 1
+version = "0.1.0"
+commit = "0000000000000000000000000000000000000000"
+upgrade = "manual"
+stacks = ["python"]
