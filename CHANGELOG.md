@@ -8,6 +8,17 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## v0.1.1
+
+Patch release. No rule changes. Fixes found in the first live sync on the fixture.
+
+- Rules added, changed or removed: none.
+- `vstd sync`: when the GitHub API refuses a request, the error now includes GitHub's own
+  message (one line, bounded), for example why a pull request could not be created.
+- Rendering: an override `replacement` or `reason` that already ends in `.`, `!` or `?` no
+  longer gets a second period in "Project overrides". Repositories without such overrides see
+  only the version line change.
+
 ## v0.1.0
 
 First release.

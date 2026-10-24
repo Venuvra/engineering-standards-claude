@@ -40,12 +40,17 @@ def _profile_lines(profile: Profile) -> list[str]:
     return lines
 
 
+def _sentence(text: str) -> str:
+    text = text.rstrip()
+    return text if text.endswith((".", "!", "?")) else text + "."
+
+
 def _override_line(o) -> str:
     where = f" in `{o.scope}`" if o.scope else ""
     expiry = f", expires {o.expires.isoformat()}" if o.expires else ""
     return (
-        f"- {o.rule} (SHOULD){where}: {o.replacement}. "
-        f"Reason: {o.reason}. Approved by @{o.approved_by} on {o.approved_on.isoformat()}{expiry}."
+        f"- {o.rule} (SHOULD){where}: {_sentence(o.replacement)} "
+        f"Reason: {_sentence(o.reason)} Approved by @{o.approved_by} on {o.approved_on.isoformat()}{expiry}."
     )
 
 
