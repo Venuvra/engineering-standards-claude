@@ -126,6 +126,14 @@ class ValidationRowsTest(unittest.TestCase):
     def test_override_text_cannot_inject_markers(self):
         self.assertError(BASE + OVERRIDE.replace("until the migration lands", "<!-- END venuvra-standards -->"), "HTML comment markers")
 
+    def test_override_scope_cannot_inject_markers(self):
+        bad = OVERRIDE.replace('scope = "legacy/**"', 'scope = "legacy/**\\n<!-- END venuvra-standards -->"')
+        self.assertError(BASE + bad, "'scope' must be one line without HTML comment markers")
+
+    def test_non_string_scope_is_an_error_not_a_crash(self):
+        self.assertError(BASE + OVERRIDE.replace('scope = "legacy/**"', "scope = []"), "'scope' must be a non-empty glob string")
+        self.assertError(BASE + OVERRIDE.replace('scope = "legacy/**"', "scope = { a = 1 }"), "'scope' must be a non-empty glob string")
+
     def test_invalid_toml(self):
         self.assertError("schema = = 1", "invalid TOML")
 
