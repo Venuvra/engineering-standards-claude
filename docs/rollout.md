@@ -36,7 +36,9 @@ For each repository it reads the default branch from GitHub, skips the repositor
 the default branch into a temporary folder, runs `init --default-branch <default>` and `check`,
 then commits on `standards/onboard`, pushes without force and opens one PR. A repository that
 fails is reported and the rest go on; the command exits 1 if any failed. Rerunning it is safe:
-repositories already done or with an open PR are skipped.
+repositories already done or with an open PR are skipped, and a `standards/onboard` branch left by
+a run whose PR failed is reused when it holds the same files (otherwise that repository fails
+with a message and the branch is left alone).
 
 It never merges, never pushes to the default branch and never changes settings. Steps 5, 7, 8
 and 9 stay with people, and each PR body lists them as a checklist: fill the project section,

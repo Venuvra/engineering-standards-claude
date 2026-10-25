@@ -7,7 +7,8 @@ For each ``owner/name``, run from a checkout of a release:
 2. Shallow-clone the default branch into a scratch folder.
 3. Run ``vstd init`` with that default branch, then ``vstd check``. Stop for
    this repository on any error.
-4. Commit on ``standards/onboard``, push it (never force) and open one PR.
+4. Commit on ``standards/onboard``, push it (never force) and open one PR. A branch
+   left by an earlier run is reused when its files match, else the repository fails.
 
 It never merges, never changes repository settings and never pushes to the
 default branch. A failure in one repository is reported and the rest go on.
@@ -115,7 +116,15 @@ def onboard(
         git(["checkout", "-q", "-b", BRANCH], cwd=dest)
         git(["add", "--", *result.written], cwd=dest)
         git([*who, "commit", "-q", "-m", f"Adopt Venuvra engineering standards v{version}"], cwd=dest)
-        git(["push", "-q", url, f"HEAD:refs/heads/{BRANCH}"], cwd=dest, env=auth)
+        if git(["ls-remote", "--heads", url, BRANCH], cwd=dest, env=auth):
+            # Left by an earlier run whose PR creation failed. Reuse it when it holds exactly
+            # this content; a new commit can't replace it without a force push.
+            git(["fetch", "-q", "--depth", "1", url, f"refs/heads/{BRANCH}"], cwd=dest, env=auth)
+            if git(["rev-parse", "FETCH_HEAD^{tree}"], cwd=dest) != git(["rev-parse", "HEAD^{tree}"], cwd=dest):
+                return RepoResult(repo, "failed", f"branch {BRANCH} already exists with other content; review or delete it, then rerun",
+                                  stacks=result.stacks)
+        else:
+            git(["push", "-q", url, f"HEAD:refs/heads/{BRANCH}"], cwd=dest, env=auth)
         pr = client.create_pr(BRANCH, base, f"Adopt Venuvra engineering standards v{version}",
                               pr_body(version, base, result.stacks, result.written, warnings))
         return RepoResult(repo, "opened", f"PR against {base}", pr.url, result.stacks, warnings)

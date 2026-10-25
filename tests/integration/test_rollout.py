@@ -5,6 +5,7 @@ import json
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +33,7 @@ class StubGitHub:
         self.requests = []
         self.repos = {}  # "owner/name" -> {"default_branch": ..., "files": {path: text}, "archived": bool}
         self.pulls = []
+        self.refuse_create = 0  # answer this many POST /pulls with a 422
         stub = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -64,6 +66,9 @@ class StubGitHub:
                     return self._reply(200, {"encoding": "base64", "content": base64.b64encode(text.encode()).decode()})
                 if self.command == "GET" and parts[4] == "pulls":
                     return self._reply(200, [p for p in stub.pulls if p["repo"] == slug and p["state"] == "open"])
+                if self.command == "POST" and parts[4] == "pulls" and stub.refuse_create:
+                    stub.refuse_create -= 1
+                    return self._reply(422, {"message": "Validation Failed"})
                 if self.command == "POST" and parts[4] == "pulls":
                     n = len(stub.pulls) + 1
                     pr = {"number": n, "html_url": f"https://example.test/{slug}/pull/{n}", "state": "open", "repo": slug, **body}
@@ -142,6 +147,33 @@ class RolloutTest(unittest.TestCase):
         log = git("log", "--format=%an %s", BRANCH, cwd=self.origins["acme/app"]).splitlines()
         self.assertEqual(log[0], f"Test Adopt Venuvra engineering standards v{__version__}")
         self.assertEqual(git("rev-list", "--count", "milestone-1", cwd=self.origins["acme/app"]), "1", "default branch untouched")
+
+    def test_rerun_after_failed_pr_reuses_pushed_branch(self):
+        self.make_repo("acme/retry")
+        self.api.refuse_create = 1
+        [first] = self.run_rollout(["acme/retry"])
+        self.assertEqual(first.outcome, "failed")
+        pushed = git("rev-parse", BRANCH, cwd=self.origins["acme/retry"])
+        time.sleep(1.1)  # a new commit would now get a different timestamp, so a different SHA
+        [second] = self.run_rollout(["acme/retry"])
+        self.assertEqual(second.outcome, "opened", second.detail)
+        self.assertEqual(git("rev-parse", BRANCH, cwd=self.origins["acme/retry"]), pushed, "branch not rewritten")
+        self.assertEqual(len(self.api.pulls), 1)
+
+    def test_existing_branch_with_other_content_fails(self):
+        origin = self.make_repo("acme/clash")
+        src = self.root / "clash-other"
+        git("clone", "-q", str(origin), str(src))
+        (src / "AGENTS.md").write_text("someone else's work\n")
+        git("add", "-A", cwd=src)
+        git("commit", "-q", "-m", "other", cwd=src)
+        git("push", "-q", "origin", f"HEAD:refs/heads/{BRANCH}", cwd=src)
+        before = git("rev-parse", BRANCH, cwd=origin)
+        [r] = self.run_rollout(["acme/clash"])
+        self.assertEqual(r.outcome, "failed")
+        self.assertIn(BRANCH, r.detail)
+        self.assertEqual(git("rev-parse", BRANCH, cwd=origin), before)
+        self.assertEqual(self.api.pulls, [])
 
     def test_skips_already_onboarded_repo(self):
         self.make_repo("acme/done", files={"README.md": "x\n"})
