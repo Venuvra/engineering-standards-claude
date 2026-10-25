@@ -8,7 +8,10 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
-## Unreleased
+## v0.3.0
+
+Minor release. No rule changes. Onboarding with `vstd rollout` needs no manual step except the
+merge, and the workflow runs the first sync by itself.
 
 - Rules added, changed or removed: none.
 - `vstd rollout` drafts the project section of a new `AGENTS.md` from the repository's own
