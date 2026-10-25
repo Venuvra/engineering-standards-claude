@@ -3,11 +3,12 @@
 The host is fixed to api.github.com; tests pass a local stub through
 ``api_url``, which the command line doesn't expose. The token is sent only in
 the Authorization header and never appears in errors or logs. There is no
-merge call: sync opens or updates a pull request and stops there.
+merge call: sync and rollout open pull requests and stop there.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import urllib.error
@@ -27,7 +28,9 @@ _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class GitHubError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None):
+        super().__init__(message)
+        self.status = status
 
 
 def _api_message(exc: urllib.error.HTTPError) -> str:
@@ -92,7 +95,7 @@ class Client:
             with _OPENER.open(req, timeout=TIMEOUT_SECONDS) as resp:
                 raw = resp.read(MAX_RESPONSE_BYTES + 1)
         except urllib.error.HTTPError as exc:
-            raise GitHubError(f"{method} {path} failed with HTTP {exc.code}{_api_message(exc)}") from None
+            raise GitHubError(f"{method} {path} failed with HTTP {exc.code}{_api_message(exc)}", exc.code) from None
         except (urllib.error.URLError, TimeoutError) as exc:
             raise GitHubError(f"{method} {path} failed: {getattr(exc, 'reason', exc)}") from None
         if len(raw) > MAX_RESPONSE_BYTES:
@@ -119,6 +122,28 @@ class Client:
 
     def update_pr(self, number: int, title: str, body: str) -> PullRequest:
         return self._pr(self._call("PATCH", f"/repos/{self.repo}/pulls/{int(number)}", {"title": title, "body": body}))
+
+    def default_branch(self) -> str:
+        data = self._call("GET", f"/repos/{self.repo}") or {}
+        if data.get("archived"):
+            raise GitHubError(f"{self.repo} is archived")
+        branch = str(data.get("default_branch") or "")
+        _check_branch(branch)
+        return branch
+
+    def file_text(self, path: str, ref: str) -> str | None:
+        """A file's text on ``ref``, or None when it doesn't exist there."""
+        _check_branch(ref)
+        query = urllib.parse.urlencode({"ref": ref})
+        try:
+            data = self._call("GET", f"/repos/{self.repo}/contents/{urllib.parse.quote(path)}?{query}")
+        except GitHubError as exc:
+            if exc.status == 404:
+                return None
+            raise
+        if not isinstance(data, dict) or data.get("encoding") != "base64":
+            raise GitHubError(f"{path} on {ref} is not a file")
+        return base64.b64decode(data.get("content") or "").decode("utf-8", "replace")
 
     def set_status(self, sha: str, state: str, description: str, target_url: str | None = None) -> None:
         if not _SHA_RE.match(sha):

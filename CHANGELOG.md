@@ -8,6 +8,13 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## Unreleased
+
+- Rules added, changed or removed: none.
+- New `vstd rollout`: onboards a list of repositories, one `standards/onboard` PR each, on
+  each repository's own default branch. Skips repositories already onboarded or with an open
+  onboarding PR; `--dry-run` runs `init` and `check` without pushing. It never merges.
+
 ## v0.1.1
 
 Patch release. No rule changes. Fixes found in the first live sync on the fixture.

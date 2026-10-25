@@ -16,9 +16,38 @@ the checks that say a repository is done.
 - **One system per repository.** Skip any repository that already carries a different
   standards system; two managed blocks in one `AGENTS.md` contradict each other.
 
+## Automated: `vstd rollout`
+
+`vstd rollout` does steps 1 to 4 and 6 below for a list of repositories, from a clean checkout
+of the release tag, with your own GitHub login:
+
+```sh
+git switch --detach vX.Y.Z
+export GH_TOKEN="$(gh auth token)"
+python3 -I vstd/main.py rollout --repos-file repos.txt --dry-run   # init and check only
+python3 -I vstd/main.py rollout --repos-file repos.txt             # push branches, open PRs
+```
+
+`repos.txt` lists `<org>/<repo>` one per line (or comma-separated); `#` starts a comment, so a
+skipped repository can stay in the list with its reason. `--repos <org>/a,<org>/b` works too.
+
+For each repository it reads the default branch from GitHub, skips the repository when
+`.venuvra/standards.toml` is already on that branch or a `standards/onboard` PR is open, clones
+the default branch into a temporary folder, runs `init --default-branch <default>` and `check`,
+then commits on `standards/onboard`, pushes without force and opens one PR. A repository that
+fails is reported and the rest go on; the command exits 1 if any failed. Rerunning it is safe:
+repositories already done or with an open PR are skipped.
+
+It never merges, never pushes to the default branch and never changes settings. Steps 5, 7, 8
+and 9 stay with people, and each PR body lists them as a checklist: fill the project section,
+tick the Actions setting, merge, run the workflow once. The token is the person's own because
+the PR adds a workflow file, which a workflow's `GITHUB_TOKEN` can't push; a central Action
+would need an organisation-wide token with workflow scope.
+
 ## Per repository
 
 Work through the list one repository at a time. Each step's check must pass before the next.
+`vstd rollout` above does the agent steps except 5.
 
 | Step | Who | Do | Done when |
 | --- | --- | --- | --- |
