@@ -59,7 +59,7 @@ Work through the list one repository at a time. Each step's check must pass befo
 | 6. PR | Agent or maintainer | Push the branch, open the PR against the default branch, assign the owner | `standards/check` and the repository's own CI are green |
 | 7. Settings | Owner | Settings → Actions → General → tick "Allow GitHub Actions to create and approve pull requests" → Save | Box ticked |
 | 8. Merge | Owner | Review and merge | `standards/check` passes on the push to the default branch |
-| 9. Sync | Agent or owner | Actions → standards → Run workflow on the default branch, "Print the diff only" unticked; or `gh workflow run standards.yml -R <org>/<repo> --ref <default>` | The `vstd sync` step logs `Up to date with vX.Y.Z; nothing to do.` |
+| 9. Sync | Agent or owner | Actions → standards → Run workflow on the default branch, "What the sync should do" set to `open-pr` (workflows installed before that dropdown: untick "Print the diff only"); or `gh workflow run standards.yml -R <org>/<repo> --ref <default>` | The `vstd sync` step logs `Up to date with vX.Y.Z; nothing to do.` |
 
 ## Branches
 
