@@ -8,7 +8,19 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
-## v0.3.0
+## v0.3.1
+
+Patch release. No rule changes. Use this instead of v0.3.0.
+
+- Rules added, changed or removed: none.
+- The `v0.3.0` tag was pushed on the commit before the release PR merged, so it points at a
+  development build (`0.2.1.dev0`) and was never published. Tags can't move; v0.3.1 carries
+  everything listed under v0.3.0. Don't pin `v0.3.0`.
+- `vstd sync` refuses a release tag whose `vstd/__init__.py` names a different version, so a
+  mistagged release is never proposed.
+- `docs/releasing.md`: tag the release PR's merge commit by its SHA, after the merge.
+
+## v0.3.0 (tagged in error, not published)
 
 Minor release. No rule changes. Onboarding with `vstd rollout` needs no manual step except the
 merge, and the workflow runs the first sync by itself.
