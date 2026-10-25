@@ -186,7 +186,8 @@ def cmd_rollout(args) -> int:
         return 1
     try:
         results = rollout(repos, load_rules(STANDARDS_ROOT / "rules"), version=__version__, commit=commit,
-                          standards_root=STANDARDS_ROOT, token=token, author=(name, email), dry_run=args.dry_run)
+                          standards_root=STANDARDS_ROOT, token=token, author=(name, email), dry_run=args.dry_run,
+                          allow_actions_prs=args.allow_actions_prs)
     except ValueError as exc:
         print(f"ERROR {exc}")
         return 1
@@ -197,6 +198,11 @@ def cmd_rollout(args) -> int:
             print(f"         warning: {w}")
     failed = sum(r.outcome == "failed" for r in results)
     print(f"rollout: {len(results)} repositories, {failed} failed")
+    prs = [r for r in results if r.pr_url]
+    if prs:
+        print("\nPull requests to review and merge (rerun later to refresh the check state):")
+        for r in prs:
+            print(f"  {r.checks or 'no checks':9} {r.pr_url}")
     return 1 if failed else 0
 
 
@@ -240,6 +246,8 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--repos", help="comma-separated owner/name list")
     g.add_argument("--repos-file", help="file with one owner/name per line (# comments allowed)")
     p.add_argument("--dry-run", action="store_true", help="init and check each repository in a scratch clone; push nothing")
+    p.add_argument("--allow-actions-prs", action="store_true",
+                   help="also tick 'Allow GitHub Actions to create and approve pull requests' in each repository")
     p.set_defaults(func=cmd_rollout)
     p = sub.add_parser("eject", help="stop using the central standards; keep the rules as plain text")
     p.add_argument("--repo", default=".", help="repository root (default: current directory)")

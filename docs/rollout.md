@@ -18,15 +18,17 @@ the checks that say a repository is done.
 
 ## Automated: `vstd rollout`
 
-`vstd rollout` does steps 1 to 4 and 6 below for a list of repositories, from a clean checkout
-of the release tag, with your own GitHub login:
+`vstd rollout` does every step below except the merge, for a list of repositories, from a clean
+checkout of the release tag, with your own GitHub login. In PowerShell:
 
-```sh
+```powershell
 git switch --detach vX.Y.Z
-export GH_TOKEN="$(gh auth token)"
-python3 -I vstd/main.py rollout --repos-file repos.txt --dry-run   # init and check only
-python3 -I vstd/main.py rollout --repos-file repos.txt             # push branches, open PRs
+$env:GH_TOKEN = gh auth token
+python -I vstd/main.py rollout --repos-file repos.txt --dry-run                # init and check only
+python -I vstd/main.py rollout --repos-file repos.txt --allow-actions-prs      # push branches, open PRs
 ```
+
+In a POSIX shell, use `export GH_TOKEN="$(gh auth token)"` and `python3`.
 
 `repos.txt` lists `<org>/<repo>` one per line (or comma-separated); `#` starts a comment, so a
 skipped repository can stay in the list with its reason. `--repos <org>/a,<org>/b` works too.
@@ -40,16 +42,33 @@ repositories already done or with an open PR are skipped, and a `standards/onboa
 a run whose PR failed is reused when it holds the same files (otherwise that repository fails
 with a message and the branch is left alone).
 
-It never merges, never pushes to the default branch and never changes settings. Steps 5, 7, 8
-and 9 stay with people, and each PR body lists them as a checklist: fill the project section,
-tick the Actions setting, merge, run the workflow once. The token is the person's own because
+What it automates beyond the clone and PR:
+
+- **Project section (step 5).** When `init` creates `AGENTS.md`, rollout drafts its project
+  section from the repository's own files: `package.json` scripts, `Makefile` targets, tools
+  configured in `pyproject.toml`, and one-line `run:` steps in its CI workflows. Nothing is
+  guessed or run; if nothing is found, the section says so. A repository that already had
+  `AGENTS.md` keeps its own text and gets no draft.
+- **Actions setting (step 7).** With `--allow-actions-prs` it ticks "Allow GitHub Actions to
+  create and approve pull requests" through the API and leaves the default token permission as
+  it is (it warns when that is read and write). If the organisation locks the setting, the PR
+  still opens and the warning says to tick it by hand. Without the flag, no setting changes.
+- **First sync (step 9).** The workflow runs the sync by itself on the push that changes
+  `.venuvra/standards.toml`, so merging the onboarding PR is enough. A rebase merge of several
+  commits may not trigger it; the weekly sync then does the same check on Monday.
+- **Merge list.** It ends with every onboarding PR and its check state (green, running,
+  failing). Rerun it later to refresh the states.
+
+The merge (step 8) stays with a person: standards changes reach a default branch only through a
+reviewed PR, and rollout never merges or pushes to the default branch. The PR body lists what is
+left to confirm. The token is the person's own because
 the PR adds a workflow file, which a workflow's `GITHUB_TOKEN` can't push; a central Action
 would need an organisation-wide token with workflow scope.
 
 ## Per repository
 
 Work through the list one repository at a time. Each step's check must pass before the next.
-`vstd rollout` above does the agent steps except 5.
+`vstd rollout` above does all of them except 8.
 
 | Step | Who | Do | Done when |
 | --- | --- | --- | --- |
@@ -61,7 +80,7 @@ Work through the list one repository at a time. Each step's check must pass befo
 | 6. PR | Agent or maintainer | Push the branch, open the PR against the default branch, assign the owner | `standards/check` and the repository's own CI are green |
 | 7. Settings | Owner | Settings → Actions → General → tick "Allow GitHub Actions to create and approve pull requests" → Save | Box ticked |
 | 8. Merge | Owner | Review and merge | `standards/check` passes on the push to the default branch |
-| 9. Sync | Agent or owner | Actions → standards → Run workflow on the default branch, "What the sync should do" set to `open-pr` (workflows installed before that dropdown: untick "Print the diff only"); or `gh workflow run standards.yml -R <org>/<repo> --ref <default>` | The `vstd sync` step logs `Up to date with vX.Y.Z; nothing to do.` |
+| 9. Sync | Automatic | Runs on the merge push. By hand: Actions → standards → Run workflow, "What the sync should do" set to `open-pr` (workflows from before v0.2.0: untick "Print the diff only") | The `vstd sync` step logs `Up to date with vX.Y.Z; nothing to do.` |
 
 ## Branches
 
