@@ -8,6 +8,14 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## Unreleased
+
+- Rules added, changed or removed: none.
+- Workflow template: the manual "Run workflow" form uses a dropdown, `mode`, with
+  `diff-only` (default, changes nothing) and `open-pr`, instead of the `dry_run` checkbox.
+  Sync never rewrites an installed workflow, so repositories onboarded earlier keep the
+  checkbox until they rerun `vstd init --force`.
+
 ## v0.1.1
 
 Patch release. No rule changes. Fixes found in the first live sync on the fixture.
