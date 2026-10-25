@@ -10,7 +10,7 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from vstd import __version__
+VERSION = "0.1.0"  # a release; the package version is a .dev build between releases
 from vstd.rollout import BRANCH, parse_repo_list, rollout
 from vstd.rules import load_rules
 
@@ -123,7 +123,7 @@ class RolloutTest(unittest.TestCase):
         # One call per repo because each has its own local origin; real runs derive the GitHub URL.
         results = []
         for repo in repos:
-            results += rollout([repo], RULES, version=__version__, commit=SHA, standards_root=PROJECT, token=TOKEN,
+            results += rollout([repo], RULES, version=VERSION, commit=SHA, standards_root=PROJECT, token=TOKEN,
                                author=("Test", "test@example.com"), dry_run=dry_run, api_url=self.api.url,
                                clone_url=str(self.origins.get(repo, self.root / "missing.git")))
         return results
@@ -145,7 +145,7 @@ class RolloutTest(unittest.TestCase):
         workflow = git("show", f"{BRANCH}:.github/workflows/standards.yml", cwd=self.origins["acme/app"])
         self.assertIn("milestone-1", workflow)
         log = git("log", "--format=%an %s", BRANCH, cwd=self.origins["acme/app"]).splitlines()
-        self.assertEqual(log[0], f"Test Adopt Venuvra engineering standards v{__version__}")
+        self.assertEqual(log[0], f"Test Adopt Venuvra engineering standards v{VERSION}")
         self.assertEqual(git("rev-list", "--count", "milestone-1", cwd=self.origins["acme/app"]), "1", "default branch untouched")
 
     def test_rerun_after_failed_pr_reuses_pushed_branch(self):
@@ -218,7 +218,7 @@ class RolloutTest(unittest.TestCase):
 
     def test_rejects_bad_slugs_before_touching_anything(self):
         with self.assertRaises(ValueError):
-            rollout(["acme/ok", "not-a-slug"], RULES, version=__version__, commit=SHA, standards_root=PROJECT,
+            rollout(["acme/ok", "not-a-slug"], RULES, version=VERSION, commit=SHA, standards_root=PROJECT,
                     token=TOKEN, author=("Test", "test@example.com"), api_url=self.api.url)
         self.assertEqual(self.api.requests, [])
 
