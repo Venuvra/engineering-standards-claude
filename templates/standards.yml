@@ -11,10 +11,13 @@ on:
     - cron: "17 6 * * 1" # weekly sync proposal, Monday 06:17 UTC
   workflow_dispatch:
     inputs:
-      dry_run:
-        description: Print the diff only
-        type: boolean
-        default: true
+      mode:
+        description: What the sync should do
+        type: choice
+        options:
+          - diff-only
+          - open-pr
+        default: diff-only
 
 permissions:
   contents: read
@@ -109,7 +112,7 @@ jobs:
       - name: vstd sync
         env:
           GH_TOKEN: ${{ github.token }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'open-pr' }}
         run: |
           set -- sync --repo .
           if [ "$DRY_RUN" = "true" ]; then set -- "$@" --dry-run; fi
