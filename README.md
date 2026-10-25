@@ -9,6 +9,7 @@ The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 ## Docs
 
 - [Adopting the standards in a repository](docs/adopting.md)
+- [Rolling out across repositories](docs/rollout.md)
 - [Overrides](docs/overrides.md)
 - [Releasing](docs/releasing.md)
 - [Changelog](CHANGELOG.md)
