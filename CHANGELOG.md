@@ -15,6 +15,9 @@ wording only. Tags `vX.Y.Z` are immutable.
   `diff-only` (default, changes nothing) and `open-pr`, instead of the `dry_run` checkbox.
   Sync never rewrites an installed workflow, so repositories onboarded earlier keep the
   checkbox until they rerun `vstd init --force`.
+- New `vstd rollout`: onboards a list of repositories, one `standards/onboard` PR each, on
+  each repository's own default branch. Skips repositories already onboarded or with an open
+  onboarding PR; `--dry-run` runs `init` and `check` without pushing. It never merges.
 
 ## v0.1.1
 

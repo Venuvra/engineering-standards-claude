@@ -23,6 +23,7 @@ from vstd import writer  # noqa: E402
 from vstd.eject import EjectError, eject  # noqa: E402
 from vstd.init import InitError, init  # noqa: E402
 from vstd.lint import lint_paths  # noqa: E402
+from vstd.rollout import parse_repo_list, rollout  # noqa: E402
 from vstd.check import check  # noqa: E402
 from vstd.github import GitHubError  # noqa: E402
 from vstd.rules import RuleError, load_rules  # noqa: E402
@@ -121,16 +122,24 @@ def _git_out(args: list[str], cwd: Path) -> str | None:
     return proc.stdout.strip() if proc.returncode == 0 else None
 
 
-def cmd_init(args) -> int:
+def _release_commit(command: str) -> str | None:
+    """The pinned commit, when this checkout is a clean release tag; otherwise print why and return None."""
     if ".dev" in __version__:
-        print(f"ERROR vstd {__version__} is a development build; run init from a release checkout (vX.Y.Z)")
-        return 1
+        print(f"ERROR vstd {__version__} is a development build; run {command} from a release checkout (vX.Y.Z)")
+        return None
     commit = _git_out(["rev-parse", "HEAD"], STANDARDS_ROOT)
     if not commit or _git_out(["status", "--porcelain"], STANDARDS_ROOT):
-        print("ERROR run init from a clean git checkout of a release, so the commit can be pinned")
-        return 1
+        print(f"ERROR run {command} from a clean git checkout of a release, so the commit can be pinned")
+        return None
     if f"v{__version__}" not in (_git_out(["tag", "--points-at", "HEAD"], STANDARDS_ROOT) or "").split():
         print(f"ERROR this checkout is not tag v{__version__}; check out the release tag first")
+        return None
+    return commit
+
+
+def cmd_init(args) -> int:
+    commit = _release_commit("init")
+    if not commit:
         return 1
     repo = Path(args.repo)
     branch = args.default_branch or _git_out(["symbolic-ref", "--short", "HEAD"], repo) or "main"
@@ -148,6 +157,47 @@ def cmd_init(args) -> int:
         print(f"kept existing {rel} (use --force to replace it)")
     print("Review the changes, then push them on a branch and open a PR.")
     return 0
+
+
+def cmd_rollout(args) -> int:
+    if args.repos_file:
+        try:
+            text = Path(args.repos_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"ERROR can't read {args.repos_file}: {exc.strerror}")
+            return 1
+    else:
+        text = args.repos or ""
+    repos = parse_repo_list(text)
+    if not repos:
+        print("ERROR name the repositories with --repos owner/a,owner/b or --repos-file")
+        return 1
+    commit = _release_commit("rollout")
+    if not commit:
+        return 1
+    token = os.environ.get("GH_TOKEN", "")
+    if not token:
+        print("ERROR set GH_TOKEN to your own token, for example GH_TOKEN=$(gh auth token)")
+        return 1
+    name = _git_out(["config", "user.name"], STANDARDS_ROOT)
+    email = _git_out(["config", "user.email"], STANDARDS_ROOT)
+    if not (name and email):
+        print("ERROR set git user.name and user.email; the onboarding commits are made in your name")
+        return 1
+    try:
+        results = rollout(repos, load_rules(STANDARDS_ROOT / "rules"), version=__version__, commit=commit,
+                          standards_root=STANDARDS_ROOT, token=token, author=(name, email), dry_run=args.dry_run)
+    except ValueError as exc:
+        print(f"ERROR {exc}")
+        return 1
+    for r in results:
+        stacks = f" [{', '.join(r.stacks) or 'core only'}]" if r.outcome in ("opened", "ready") else ""
+        print(f"{r.outcome.upper():8} {r.repo}{stacks}: {r.detail}{' ' + r.pr_url if r.pr_url else ''}")
+        for w in r.warnings:
+            print(f"         warning: {w}")
+    failed = sum(r.outcome == "failed" for r in results)
+    print(f"rollout: {len(results)} repositories, {failed} failed")
+    return 1 if failed else 0
 
 
 def cmd_eject(args) -> int:
@@ -185,6 +235,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--default-branch", help="branch the check runs on for pushes (default: the checked-out branch)")
     p.add_argument("--force", action="store_true", help="replace an existing standards.toml or standards workflow")
     p.set_defaults(func=cmd_init)
+    p = sub.add_parser("rollout", help="open one onboarding PR in each of several repositories")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--repos", help="comma-separated owner/name list")
+    g.add_argument("--repos-file", help="file with one owner/name per line (# comments allowed)")
+    p.add_argument("--dry-run", action="store_true", help="init and check each repository in a scratch clone; push nothing")
+    p.set_defaults(func=cmd_rollout)
     p = sub.add_parser("eject", help="stop using the central standards; keep the rules as plain text")
     p.add_argument("--repo", default=".", help="repository root (default: current directory)")
     p.set_defaults(func=cmd_eject)

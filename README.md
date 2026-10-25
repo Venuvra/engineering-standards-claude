@@ -9,6 +9,7 @@ The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 ## Docs
 
 - [Adopting the standards in a repository](docs/adopting.md)
+- [Rolling out across repositories](docs/rollout.md)
 - [Overrides](docs/overrides.md)
 - [Releasing](docs/releasing.md)
 - [Changelog](CHANGELOG.md)
@@ -16,7 +17,7 @@ The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 ## Status
 
 Milestone M1: core rules plus the TypeScript and Python stacks, `vstd check`, `sync`,
-`init`, `eject` and `lint-workflows`. Released as v0.1.0 and v0.1.1; see the
+`init`, `rollout`, `eject` and `lint-workflows`. Released as v0.1.0 and v0.1.1; see the
 [changelog](CHANGELOG.md).
 
 ## Onboarding and leaving
@@ -37,6 +38,14 @@ can't create workflow files.
 Stacks are detected from manifests in the root and one folder down: `package.json`,
 `tsconfig.json` or `pnpm-lock.yaml` mean `typescript`; `pyproject.toml`, `setup.py`,
 `setup.cfg`, `Pipfile`, `requirements*.txt`, `uv.lock` or `poetry.lock` mean `python`.
+
+To onboard many repositories at once, `rollout` runs `init` and `check` on each one's
+default branch and opens one PR per repository with your own token; it never merges.
+See [docs/rollout.md](docs/rollout.md):
+
+```sh
+GH_TOKEN="$(gh auth token)" python3 -I vstd/main.py rollout --repos-file repos.txt --dry-run
+```
 
 `eject` stops using the central standards. It removes the markers from `AGENTS.md` and
 keeps the rules as plain text, keeps `CLAUDE.md` and its `@AGENTS.md` import, and deletes
