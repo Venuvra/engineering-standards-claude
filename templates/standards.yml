@@ -70,8 +70,10 @@ jobs:
         run: python3 -I .vstd/vstd/main.py check --repo .
 
   sync:
+    # Also on pushes, but it only syncs when the push changed the standards config:
+    # that runs it once right after the onboarding PR merges, with no one pressing Run.
     if: >-
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')
       && github.repository_owner == 'Venuvra'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -82,8 +84,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: false
+      - name: Decide whether to sync
+        id: gate
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" != "push" ] || git diff --name-only HEAD^ HEAD -- .venuvra/standards.toml | grep -q .; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Push did not change .venuvra/standards.toml; nothing to sync."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Read and verify the pinned release
+        if: steps.gate.outputs.run == 'true'
         id: pin
         run: |
           python3 -I - <<'EOF'
@@ -103,13 +118,15 @@ jobs:
           with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
               fh.write(f"commit={commit}\n")
           EOF
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ env.CENTRAL }}
           ref: ${{ steps.pin.outputs.commit }}
           path: .vstd
           persist-credentials: false
       - name: vstd sync
+        if: steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'open-pr' }}

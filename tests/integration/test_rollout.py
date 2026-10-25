@@ -34,6 +34,7 @@ class StubGitHub:
         self.repos = {}  # "owner/name" -> {"default_branch": ..., "files": {path: text}, "archived": bool}
         self.pulls = []
         self.refuse_create = 0  # answer this many POST /pulls with a 422
+        self.check_runs = []  # what GET commits/{sha}/check-runs returns
         stub = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -64,6 +65,16 @@ class StubGitHub:
                     if text is None:
                         return self._reply(404, {"message": "Not Found"})
                     return self._reply(200, {"encoding": "base64", "content": base64.b64encode(text.encode()).decode()})
+                if parts[4:7] == ["actions", "permissions", "workflow"]:
+                    perms = meta.setdefault("workflow", {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": False})
+                    if meta.get("lock_actions"):
+                        return self._reply(409, {"message": "organization policy prevents this"})
+                    if self.command == "PUT":
+                        perms.update(body)
+                        return self._reply(204, {})
+                    return self._reply(200, perms)
+                if self.command == "GET" and parts[4] == "commits" and parts[6] == "check-runs":
+                    return self._reply(200, {"check_runs": stub.check_runs})
                 if self.command == "GET" and parts[4] == "pulls":
                     return self._reply(200, [p for p in stub.pulls if p["repo"] == slug and p["state"] == "open"])
                 if self.command == "POST" and parts[4] == "pulls" and stub.refuse_create:
@@ -95,10 +106,13 @@ class RolloutTest(unittest.TestCase):
         self.api = StubGitHub()
         self.addCleanup(self.api.close)
         self.origins = {}
+        self.allow = False
 
     def tearDown(self):
-        bad = [r for r in self.api.requests if "/merge" in r["path"] or r["method"] in ("PUT", "PATCH", "DELETE")]
-        self.assertEqual(bad, [], "rollout must never merge or change settings")
+        # The one setting rollout may change is the Actions PR permission, and only with the flag.
+        bad = [r for r in self.api.requests if "/merge" in r["path"] or r["method"] in ("PATCH", "DELETE")
+               or (r["method"] == "PUT" and not (self.allow and r["path"].endswith("/actions/permissions/workflow")))]
+        self.assertEqual(bad, [], "rollout must never merge or change other settings")
         for r in self.api.requests:
             self.assertEqual(r["auth"], f"Bearer {TOKEN}")
             self.assertNotIn(TOKEN, json.dumps(r["body"]) + r["path"])
@@ -119,12 +133,13 @@ class RolloutTest(unittest.TestCase):
         self.origins[slug] = origin
         return origin
 
-    def run_rollout(self, repos, dry_run=False):
+    def run_rollout(self, repos, dry_run=False, allow=False):
+        self.allow = self.allow or allow
         # One call per repo because each has its own local origin; real runs derive the GitHub URL.
         results = []
         for repo in repos:
             results += rollout([repo], RULES, version=VERSION, commit=SHA, standards_root=PROJECT, token=TOKEN,
-                               author=("Test", "test@example.com"), dry_run=dry_run, api_url=self.api.url,
+                               author=("Test", "test@example.com"), dry_run=dry_run, api_url=self.api.url, allow_actions_prs=allow,
                                clone_url=str(self.origins.get(repo, self.root / "missing.git")))
         return results
 
@@ -140,7 +155,7 @@ class RolloutTest(unittest.TestCase):
         self.assertEqual(self.branches("acme/app"), sorted(["milestone-1", BRANCH]))
         [pr] = self.api.pulls
         self.assertEqual((pr["head"], pr["base"]), (BRANCH, "milestone-1"))
-        self.assertIn("Fill in the project section", pr["body"])
+        self.assertIn("Confirm the check commands drafted in the project section", pr["body"])
         self.assertIn("allow GitHub Actions to create and approve pull requests", pr["body"])
         workflow = git("show", f"{BRANCH}:.github/workflows/standards.yml", cwd=self.origins["acme/app"])
         self.assertIn("milestone-1", workflow)
@@ -174,6 +189,71 @@ class RolloutTest(unittest.TestCase):
         self.assertIn(BRANCH, r.detail)
         self.assertEqual(git("rev-parse", BRANCH, cwd=origin), before)
         self.assertEqual(self.api.pulls, [])
+
+    def test_drafts_project_section_from_repo_files(self):
+        self.make_repo("acme/web", files={
+            "package.json": json.dumps({"scripts": {"lint": "eslint .", "test": "vitest", "dev": "next dev"}}),
+            "pnpm-lock.yaml": "lockfileVersion: 9\n",
+            ".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - run: pnpm install --frozen-lockfile\n      - run: echo ${{ github.sha }}\n",
+        })
+        [r] = self.run_rollout(["acme/web"])
+        self.assertEqual(r.outcome, "opened", r.detail)
+        agents = git("show", f"{BRANCH}:AGENTS.md", cwd=self.origins["acme/web"])
+        self.assertIn("## Checks", agents)
+        self.assertIn("- `pnpm lint`", agents)
+        self.assertIn("- `pnpm test`", agents)
+        self.assertIn("- `pnpm install --frozen-lockfile`", agents)
+        self.assertNotIn("next dev", agents)
+        self.assertNotIn("github.sha", agents)
+        self.assertNotIn("Add build and test commands", agents)
+        self.assertIn("Confirm the check commands drafted", self.api.pulls[0]["body"])
+
+    def test_existing_agents_md_gets_no_draft(self):
+        self.make_repo("acme/own", files={"AGENTS.md": "Run make test.\n", "Makefile": "test:\n\techo ok\n"})
+        [r] = self.run_rollout(["acme/own"])
+        self.assertEqual(r.outcome, "opened", r.detail)
+        agents = git("show", f"{BRANCH}:AGENTS.md", cwd=self.origins["acme/own"])
+        self.assertNotIn("## Checks", agents)
+        self.assertIn("Fill in the project section", self.api.pulls[0]["body"])
+
+    def test_allow_actions_prs_ticks_only_that_setting(self):
+        self.make_repo("acme/auto")
+        [r] = self.run_rollout(["acme/auto"], allow=True)
+        self.assertEqual(r.outcome, "opened", r.detail)
+        [put] = [q for q in self.api.requests if q["method"] == "PUT"]
+        self.assertEqual(put["body"], {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": True})
+        self.assertIn("was turned on by `vstd rollout`", self.api.pulls[0]["body"])
+
+    def test_without_flag_settings_are_untouched(self):
+        self.make_repo("acme/manual")
+        [r] = self.run_rollout(["acme/manual"])
+        self.assertEqual(r.outcome, "opened", r.detail)
+        self.assertFalse([q for q in self.api.requests if "actions/permissions" in q["path"]])
+        self.assertIn("allow GitHub Actions to create and approve pull requests", self.api.pulls[0]["body"])
+
+    def test_locked_setting_is_a_warning_not_a_failure(self):
+        self.make_repo("acme/locked", lock_actions=True)
+        [r] = self.run_rollout(["acme/locked"], allow=True)
+        self.assertEqual(r.outcome, "opened", r.detail)
+        self.assertTrue(any("could not turn on the Actions PR setting" in w for w in r.warnings), r.warnings)
+        self.assertIn("allow GitHub Actions to create and approve pull requests", self.api.pulls[0]["body"])
+
+    def test_dry_run_with_flag_changes_no_setting(self):
+        self.make_repo("acme/drysetting")
+        [r] = self.run_rollout(["acme/drysetting"], dry_run=True, allow=True)
+        self.assertEqual(r.outcome, "ready", r.detail)
+        self.assertEqual([q for q in self.api.requests if q["method"] != "GET"], [])
+
+    def test_open_pr_reports_its_check_state(self):
+        self.make_repo("acme/state")
+        self.api.pulls.append({"number": 9, "html_url": "https://example.test/acme/state/pull/9", "state": "open",
+                               "repo": "acme/state", "title": "t", "body": "b", "head": {"sha": "c" * 40}, "base": "main"})
+        self.api.check_runs = [{"status": "completed", "conclusion": "success"}, {"status": "completed", "conclusion": "skipped"}]
+        [r] = self.run_rollout(["acme/state"])
+        self.assertEqual((r.outcome, r.checks), ("skipped", "green"))
+        self.api.check_runs = [{"status": "completed", "conclusion": "failure"}]
+        [r] = self.run_rollout(["acme/state"])
+        self.assertEqual(r.checks, "failing")
 
     def test_skips_already_onboarded_repo(self):
         self.make_repo("acme/done", files={"README.md": "x\n"})

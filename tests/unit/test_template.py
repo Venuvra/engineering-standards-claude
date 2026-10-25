@@ -35,5 +35,18 @@ class DispatchFormTest(unittest.TestCase):
         self.assertIn("inputs.mode != 'open-pr'", TEMPLATE, "anything but open-pr must stay a dry run")
 
 
+class PushSyncTest(unittest.TestCase):
+    def test_sync_runs_on_push_only_when_the_config_changed(self):
+        sync = TEMPLATE[TEMPLATE.index("  sync:"):]
+        self.assertIn("github.event_name == 'push'", sync.split("runs-on:")[0])
+        self.assertIn("git diff --name-only HEAD^ HEAD -- .venuvra/standards.toml", sync)
+        self.assertIn("fetch-depth: 2", sync)
+        # Every step after the gate is skipped when the push didn't touch the config.
+        after_gate = sync[sync.index("id: gate"):].split("\n      - ")[1:]
+        self.assertEqual(len(after_gate), 3)
+        for step in after_gate:
+            self.assertIn("if: steps.gate.outputs.run == 'true'", step)
+
+
 if __name__ == "__main__":
     unittest.main()

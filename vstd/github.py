@@ -3,7 +3,9 @@
 The host is fixed to api.github.com; tests pass a local stub through
 ``api_url``, which the command line doesn't expose. The token is sent only in
 the Authorization header and never appears in errors or logs. There is no
-merge call: sync and rollout open pull requests and stop there.
+merge call: sync and rollout open pull requests and stop there. The only
+setting it changes is the Actions pull-request permission, and only when rollout
+is run with ``--allow-actions-prs``.
 """
 
 from __future__ import annotations
@@ -67,6 +69,7 @@ class PullRequest:
     url: str
     title: str
     body: str
+    head_sha: str = ""
 
 
 class Client:
@@ -104,7 +107,9 @@ class Client:
 
     @staticmethod
     def _pr(data: dict) -> PullRequest:
-        return PullRequest(int(data["number"]), str(data["html_url"]), str(data.get("title") or ""), str(data.get("body") or ""))
+        head = data.get("head") if isinstance(data.get("head"), dict) else {}
+        return PullRequest(int(data["number"]), str(data["html_url"]), str(data.get("title") or ""), str(data.get("body") or ""),
+                           str(head.get("sha") or ""))
 
     def find_open_pr(self, head: str, base: str) -> PullRequest | None:
         _check_branch(head)
@@ -144,6 +149,31 @@ class Client:
         if not isinstance(data, dict) or data.get("encoding") != "base64":
             raise GitHubError(f"{path} on {ref} is not a file")
         return base64.b64decode(data.get("content") or "").decode("utf-8", "replace")
+
+    def check_state(self, sha: str) -> str:
+        """Summary of the check runs on a commit: green, running, failing or no checks."""
+        if not _SHA_RE.match(sha):
+            raise GitHubError(f"'{sha}' is not a commit SHA")
+        runs = (self._call("GET", f"/repos/{self.repo}/commits/{sha}/check-runs?per_page=100") or {}).get("check_runs") or []
+        if not runs:
+            return "no checks"
+        if any(r.get("status") != "completed" for r in runs):
+            return "running"
+        if all(r.get("conclusion") in ("success", "neutral", "skipped") for r in runs):
+            return "green"
+        return "failing"
+
+    def allow_actions_prs(self) -> str:
+        """Tick "Allow GitHub Actions to create and approve pull requests", keeping the
+        default token permission as it is. Returns that permission ("read" or "write")."""
+        current = self._call("GET", f"/repos/{self.repo}/actions/permissions/workflow") or {}
+        default = current.get("default_workflow_permissions")
+        if default not in ("read", "write"):
+            raise GitHubError(f"{self.repo}: unexpected workflow permissions {default!r}")
+        if not current.get("can_approve_pull_request_reviews"):
+            self._call("PUT", f"/repos/{self.repo}/actions/permissions/workflow",
+                       {"default_workflow_permissions": default, "can_approve_pull_request_reviews": True})
+        return default
 
     def set_status(self, sha: str, state: str, description: str, target_url: str | None = None) -> None:
         if not _SHA_RE.match(sha):

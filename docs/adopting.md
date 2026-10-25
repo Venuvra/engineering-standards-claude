@@ -17,7 +17,7 @@ cd ../your-repo && git switch -c standards/onboard && git add -A && git status
 | File | What it is |
 | --- | --- |
 | `.venuvra/standards.toml` | Pinned `version` and `commit`, `upgrade` policy, `stacks`, overrides |
-| `.github/workflows/standards.yml` | `check` on PRs and pushes; weekly `sync` |
+| `.github/workflows/standards.yml` | `check` on PRs and pushes; `sync` weekly and on a push that changes the config |
 | `AGENTS.md` | Managed block first, then your project section (existing text is kept below the block) |
 | `CLAUDE.md` | Line 1 `@AGENTS.md`, then Claude Code-only notes (existing text is kept) |
 
@@ -48,7 +48,7 @@ said before, then merge.
 
 ## 4. Updates and rollback
 
-- The weekly job opens or updates one PR on `standards/update` with the files, rule IDs and
+- The weekly job, and any push that changes `.venuvra/standards.toml`, opens or updates one PR on `standards/update` with the files, rule IDs and
   changelog. It never merges. To update now, run the workflow by hand and pick `open-pr` under "What the sync should do"; the default, `diff-only`, prints the diff and changes nothing.
 - `upgrade = "patch"` or `"minor"` limits what it proposes. A new major always needs a hand
   edit of `version` and `commit`.

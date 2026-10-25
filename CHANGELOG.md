@@ -11,6 +11,14 @@ wording only. Tags `vX.Y.Z` are immutable.
 ## Unreleased
 
 - Rules added, changed or removed: none.
+- `vstd rollout` drafts the project section of a new `AGENTS.md` from the repository's own
+  files (package.json scripts, Makefile targets, pyproject.toml tools, CI `run:` lines).
+- `vstd rollout --allow-actions-prs` ticks "Allow GitHub Actions to create and approve pull
+  requests" in each repository it onboards. It changes no other setting.
+- `vstd rollout` ends with the onboarding PRs and their check state.
+- Workflow template: the sync job also runs on a push that changes `.venuvra/standards.toml`,
+  so the first sync after onboarding needs no manual run. Installed workflows keep the old
+  behaviour until `vstd init --force`.
 
 ## v0.2.0
 
