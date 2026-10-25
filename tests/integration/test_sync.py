@@ -266,6 +266,22 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(len(self.api.pulls), 1)
 
     # AC-11: dry run
+    def test_refuses_a_tag_on_a_commit_with_another_version(self):
+        # A release tag pushed before the release PR merged points at the previous dev build.
+        bare, src = self.root / "mistagged.git", self.root / "mistagged-src"
+        git("init", "-q", "--bare", str(bare))
+        git("init", "-q", str(src))
+        (src / "vstd").mkdir()
+        (src / "vstd" / "main.py").write_text("")
+        (src / "vstd" / "__init__.py").write_text('__version__ = "0.2.1.dev0"\n')
+        git("add", "-A", cwd=src)
+        git("commit", "-q", "-m", "dev", cwd=src)
+        git("tag", "v0.3.0", cwd=src)
+        git("push", "-q", str(bare), "main", "--tags", cwd=src)
+        sha = git("rev-parse", "HEAD", cwd=src)
+        with self.assertRaisesRegex(sync.SyncError, "carries vstd 0.2.1.dev0, not 0.3.0"):
+            sync.fetch_release(str(bare), (0, 3, 0), sha, self.root / "fetched")
+
     def test_dry_run_shows_diff_and_changes_nothing(self):
         self.make_consumer()
         before = self.snapshot()

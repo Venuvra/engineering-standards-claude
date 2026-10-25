@@ -125,6 +125,9 @@ def choose_target(current: Version, releases: dict[Version, str], policy: str) -
     return max(allowed, default=current), newer_major
 
 
+_TOOL_VERSION_RE = re.compile(r'^__version__ = "([^"]+)"$', re.M)
+
+
 def fetch_release(url: str, version: Version, sha: str, dest: Path) -> Path:
     tag = f"v{fmt(version)}"
     git(["init", "-q", str(dest)])
@@ -135,6 +138,12 @@ def fetch_release(url: str, version: Version, sha: str, dest: Path) -> Path:
     git(["-c", "advice.detachedHead=false", "checkout", "-q", "--detach", sha], cwd=dest)
     if not (dest / "vstd" / "main.py").is_file():
         raise SyncError(f"{tag} has no vstd/main.py")
+    # A tag pushed on the wrong commit (say, before the release PR merged) must not be
+    # proposed as that release. Tags can't move, so the next release supersedes it.
+    init_py = dest / "vstd" / "__init__.py"
+    m = _TOOL_VERSION_RE.search(init_py.read_text(encoding="utf-8")) if init_py.is_file() else None
+    if not m or m.group(1) != fmt(version):
+        raise SyncError(f"{tag} carries vstd {m.group(1) if m else 'with no version'}, not {fmt(version)}; refusing")
     return dest
 
 

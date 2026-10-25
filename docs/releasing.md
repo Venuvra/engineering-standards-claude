@@ -21,7 +21,9 @@ Rule IDs are never reused. A removed rule's ID goes into `rules/retired.toml`.
    `.venuvra/standards.toml` (its `commit` stays zeroed). Then re-render this repo's `AGENTS.md`
    (`python3 -I vstd/main.py sync --local --repo .`) and update the golden files if the output changed.
 2. Merge after `ci` is green.
-3. Tag the merge commit: `git tag vX.Y.Z <sha> && git push origin vX.Y.Z`.
+3. After the PR has merged, tag its merge commit by SHA (the PR page shows it), not a branch name:
+   `git tag vX.Y.Z <merge sha> && git push origin vX.Y.Z`. A tag on any other commit fails the
+   release check and can't be moved; the fix is the next PATCH release.
 4. `release.yml` checks the tag is on `main`, matches `__version__` and has a green `ci`
    check, re-runs the tests and publishes the release with that changelog section.
 5. Set `__version__` back to the next `.dev0` and add a new `## Unreleased` section.
