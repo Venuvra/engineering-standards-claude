@@ -11,13 +11,14 @@ matches the deploy target gives the same result on a laptop, in a cloud session 
 
 ## What the gate must do
 
-- Run with one command from a clean checkout, for example `docker compose -f compose.test.yml run --rm test`
+- Run with one command from a clean checkout, for example `docker compose -f compose.test.yml run --rm --build test`
   (wrap it in `make test-docker` or an npm script if you like). Name it in the project
   instructions of `AGENTS.md`.
 - Run everything CI would: install from the lockfile, lint, type-check, unit and integration
   tests, the production build, and end-to-end tests where the project has them.
 - Start real dependencies (database, cache, queue) as services in the same compose file, never
   mocks of them (see TST-003).
+- Rebuild the test image on every run (`--build`), so it never checks a stale copy of the code.
 - Exit non-zero on any failure and leave nothing running (`--rm`, `down -v`).
 
 ## Matching the deploy target (TST-008)
