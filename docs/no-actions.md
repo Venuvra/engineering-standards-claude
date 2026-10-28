@@ -46,6 +46,18 @@ commit, marked "(local run)", so the PR shows the result as if the workflow had 
 when the working tree has uncommitted changes, because the status must describe exactly the
 commit that was checked. Without `--post-status` nothing is sent to GitHub.
 
+`--post-status` is new in the first release after v0.3.1, and `check` only runs from the release
+the repository pins. A repository pinned to v0.3.1 or earlier can either move to a newer release
+first (run the sync below and merge its PR) or run `check` without the flag and post the status
+itself, using the commit it just checked:
+
+```powershell
+$sha = git -C <path to repo> rev-parse HEAD
+gh api "repos/$env:GITHUB_REPOSITORY/statuses/$sha" -f state=success -f context=standards/check -f description="vstd check passed (local run)"
+```
+
+Post `state=failure` instead when the check reported errors.
+
 Repository CI other than the standards check (tests, builds) doesn't run either; run the
 repository's own check commands from the project section of its `AGENTS.md`.
 
