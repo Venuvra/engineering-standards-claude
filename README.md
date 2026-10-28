@@ -12,6 +12,7 @@ The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 - [Rolling out across repositories](docs/rollout.md)
 - [Overrides](docs/overrides.md)
 - [Releasing](docs/releasing.md)
+- [When GitHub Actions can't run](docs/no-actions.md)
 - [Changelog](CHANGELOG.md)
 
 ## Status

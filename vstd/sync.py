@@ -351,6 +351,26 @@ def run(
     return result
 
 
+def post_check_status(repo: Path | str, ok: bool, github_repo: str | None, token: str | None,
+                      api_url: str = github.API_URL) -> str:
+    """Report a local ``vstd check`` as the ``standards/check`` status of the checked-out commit.
+
+    The fallback for when GitHub Actions can't run: the PR still shows the check. The tree
+    must be clean so the status describes exactly the commit that was checked.
+    """
+    if not github_repo or not github.valid_repo(github_repo):
+        raise SyncError("GITHUB_REPOSITORY must be set to owner/name to post the status")
+    if not token:
+        raise SyncError("GH_TOKEN must be set to post the status")
+    repo = Path(repo)
+    if git(["status", "--porcelain"], cwd=repo):
+        raise SyncError("the working tree has uncommitted changes; commit and push them first, so the status matches what was checked")
+    sha = git(["rev-parse", "HEAD"], cwd=repo)
+    state, text = ("success", "vstd check passed (local run)") if ok else ("failure", "vstd check found problems (local run)")
+    github.Client(github_repo, token, api_url).set_status(sha, state, text)
+    return sha
+
+
 def _publish(repo, tmp, result, title, body, github_repo, token, base, push_url, api_url, target_url) -> None:
     if not github_repo or not github.valid_repo(github_repo):
         raise SyncError("GITHUB_REPOSITORY must be set to owner/name to open a PR (or use --dry-run)")
