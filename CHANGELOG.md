@@ -10,7 +10,13 @@ wording only. Tags `vX.Y.Z` are immutable.
 
 ## Unreleased
 
-- Rules added, changed or removed: none.
+Minor release (new SHOULD rules only).
+
+- Rules added: TST-007 (one-command container test gate for every deployable project),
+  TST-008 (test container matches the cloud deploy target: base image, OS, CPU architecture,
+  runtime and database versions), TST-009 (hosted CI such as GitHub Actions is optional;
+  where it runs it calls the same container command, and every PR reports the result).
+- New guide: `docs/container-testing.md`.
 - `vstd check --post-status` sets the `standards/check` commit status from a local run, marked
   "(local run)", for when Actions can't run (for example, the organisation's minutes or spending
   limit ran out). It refuses a working tree with uncommitted changes.
