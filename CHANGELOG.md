@@ -8,6 +8,10 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## Unreleased
+
+- Rules added, changed or removed: none.
+
 ## v0.4.1
 
 Patch release. No rule changes.
