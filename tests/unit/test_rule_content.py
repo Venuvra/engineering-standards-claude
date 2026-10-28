@@ -29,7 +29,7 @@ class RuleContentTest(unittest.TestCase):
 
     def test_counts_match_approved_standards(self):
         core = [r for p in self.rs.core_profiles() for r in p.rules]
-        self.assertEqual(len(core), 45)
+        self.assertEqual(len(core), 48)
         self.assertEqual(sum(r.locked for r in core), 22)
         self.assertEqual(len(self.rs.stack_profile("typescript").rules), 12)
         self.assertEqual(len(self.rs.stack_profile("python").rules), 13)
