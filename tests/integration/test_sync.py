@@ -193,6 +193,19 @@ class SyncTest(unittest.TestCase):
         self.assertIn(f'commit = "{self.central.sha["0.1.1"]}"', toml)
         self.assertIn("Always: ", self.remote_file("AGENTS.md"))
 
+    def test_crlf_working_tree_syncs_from_committed_bytes(self):
+        # A Windows checkout has CRLF where Git stores LF; the PR must carry LF only.
+        self.make_consumer(upgrade="patch")
+        for rel in ("AGENTS.md", "CLAUDE.md", ".venuvra/standards.toml"):
+            path = self.repo / rel
+            path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        r = self.sync()
+        self.assertEqual(r.target, (0, 1, 1))
+        self.assertEqual(sorted(r.changes), [".venuvra/standards.toml", "AGENTS.md"])
+        for rel, data in r.changes.items():
+            self.assertNotIn(b"\r", data, rel)
+        self.assertIn('version = "0.1.1"', self.remote_file(".venuvra/standards.toml"))
+
     def test_minor_policy_never_proposes_a_major(self):
         self.make_consumer(upgrade="minor")
         before = self.snapshot()

@@ -173,6 +173,23 @@ def _files(root: Path) -> dict[str, Path]:
     return out
 
 
+def _committed_owned_files(repo: Path) -> dict[str, bytes]:
+    """The files vstd owns as committed at HEAD, byte for byte (no line-ending conversion)."""
+    listing = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only", "HEAD"], cwd=repo, env=child_env(),
+                             capture_output=True, timeout=GIT_TIMEOUT_SECONDS)
+    if listing.returncode != 0:
+        return {}  # not a Git checkout (or no commit yet): the working tree is all there is
+    out = {}
+    for rel in listing.stdout.decode("utf-8", "replace").split("\0"):
+        if rel and owned(rel):
+            blob = subprocess.run(["git", "cat-file", "blob", f"HEAD:{rel}"], cwd=repo, env=child_env(),
+                                  capture_output=True, timeout=GIT_TIMEOUT_SECONDS)
+            if blob.returncode != 0:
+                raise SyncError(f"git cat-file failed for {rel}")
+            out[rel] = blob.stdout
+    return out
+
+
 def changed_files(original: Path, work: Path) -> dict[str, bytes]:
     changes = {}
     for rel, path in _files(work).items():
@@ -311,20 +328,26 @@ def run(
 
     with tempfile.TemporaryDirectory(prefix="vstd-sync-") as tmp:
         tmp = Path(tmp)
+        # Start from the committed bytes of the files vstd owns, not the working tree: the PR
+        # is built on HEAD, and a Windows checkout (core.autocrlf) has CRLF where Git has LF.
+        committed = tmp / "committed"
+        shutil.copytree(repo, committed, symlinks=True, ignore=shutil.ignore_patterns(*SKIP_DIRS))
+        for rel, data in _committed_owned_files(repo).items():
+            (committed / rel).write_bytes(data)
         work = tmp / "work"
-        shutil.copytree(repo, work, symlinks=True, ignore=shutil.ignore_patterns(*SKIP_DIRS))
+        shutil.copytree(committed, work, symlinks=True)
         renderer = standards_root
         if target != current:
             renderer = fetch_release(central_url, target, releases[target], tmp / "release")
             cfg_path = work / config_mod.CONFIG_PATH
-            cfg_path.write_text(set_pin(cfg_path.read_text(encoding="utf-8"), target, releases[target]), encoding="utf-8")
+            cfg_path.write_bytes(set_pin(cfg_path.read_bytes().decode("utf-8"), target, releases[target]).encode("utf-8"))
 
         proc = tool(renderer, "sync", "--local", "--repo", str(work))
         if proc.returncode != 0:
             raise SyncError(f"v{fmt(target)} could not render this repository:\n{(proc.stdout + proc.stderr).strip()}")
-        result.changes = changed_files(repo, work)
+        result.changes = changed_files(committed, work)
         result.check_ok = tool(renderer, "check", "--repo", str(work)).returncode == 0
-        result.diff = render_diff(repo, result.changes)
+        result.diff = render_diff(committed, result.changes)
 
         if not result.changes:
             result.messages.append(f"Up to date with v{fmt(target)}; nothing to do.")

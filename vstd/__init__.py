@@ -1,3 +1,3 @@
 """vstd: generate and check Venuvra engineering standards in a repository."""
 
-__version__ = "0.4.1.dev0"
+__version__ = "0.4.1"
