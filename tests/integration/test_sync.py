@@ -320,6 +320,64 @@ class SyncTest(unittest.TestCase):
         self.assertIsNone(self.remote_branch())
 
 
+class PostCheckStatusTest(unittest.TestCase):
+    """vstd check --post-status: the fallback that reports a local check when Actions can't run."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.repo = Path(tmp.name)
+        git("init", "-q", str(self.repo))
+        (self.repo / "README.md").write_text("# consumer\n")
+        git("add", "-A", cwd=self.repo)
+        git("commit", "-q", "-m", "init", cwd=self.repo)
+        self.head = git("rev-parse", "HEAD", cwd=self.repo)
+        self.api = StubGitHub()
+        self.addCleanup(self.api.close)
+
+    def post(self, ok=True, github_repo="acme/app", token=TOKEN):
+        return sync.post_check_status(self.repo, ok, github_repo, token, api_url=self.api.url)
+
+    def test_posts_result_on_checked_out_commit(self):
+        for ok, state in ((True, "success"), (False, "failure")):
+            self.api.requests.clear()
+            self.assertEqual(self.post(ok=ok), self.head)
+            (req,) = self.api.requests
+            self.assertEqual((req["method"], req["path"]), ("POST", f"/repos/acme/app/statuses/{self.head}"))
+            self.assertEqual(req["body"]["context"], "standards/check")
+            self.assertEqual(req["body"]["state"], state)
+            self.assertIn("(local run)", req["body"]["description"])
+            self.assertEqual(req["auth"], f"Bearer {TOKEN}")
+
+    def test_refuses_uncommitted_changes(self):
+        (self.repo / "README.md").write_text("# edited\n")
+        with self.assertRaisesRegex(sync.SyncError, "uncommitted"):
+            self.post()
+        self.assertEqual(self.api.requests, [])
+
+    def test_needs_repository_and_token(self):
+        with self.assertRaisesRegex(sync.SyncError, "GITHUB_REPOSITORY"):
+            self.post(github_repo=None)
+        with self.assertRaisesRegex(sync.SyncError, "GH_TOKEN"):
+            self.post(token=None)
+        self.assertEqual(self.api.requests, [])
+
+    def test_cli_reports_missing_repository_without_calling_github(self):
+        import contextlib
+        import io
+        import os
+        from unittest import mock
+
+        from vstd import main
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {"GH_TOKEN": TOKEN}, clear=False), contextlib.redirect_stderr(err), \
+                contextlib.redirect_stdout(io.StringIO()):
+            os.environ.pop("GITHUB_REPOSITORY", None)
+            code = main.main(["check", "--repo", str(self.repo), "--post-status"])
+        self.assertEqual(code, 1)
+        self.assertIn("could not post the standards/check status", err.getvalue())
+
+
 class UnitTest(unittest.TestCase):
     def test_choose_target(self):
         rel = {(0, 1, 0): "a", (0, 1, 3): "b", (0, 4, 0): "c", (1, 0, 0): "d"}

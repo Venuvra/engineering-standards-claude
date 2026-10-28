@@ -42,6 +42,14 @@ def cmd_check(args) -> int:
     out = report.format()
     print(out)
     _summary(out)
+    if args.post_status:
+        github_repo = os.environ.get("GITHUB_REPOSITORY")
+        try:
+            sha = sync_mod.post_check_status(args.repo, report.ok, github_repo, os.environ.get("GH_TOKEN"))
+        except (sync_mod.SyncError, GitHubError) as exc:
+            print(f"ERROR could not post the standards/check status: {exc}", file=sys.stderr)
+            return 1
+        print(f"Posted standards/check={'success' if report.ok else 'failure'} on {github_repo}@{sha[:12]}")
     return 0 if report.ok else 1
 
 
@@ -228,6 +236,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("check", help="detect drift and invalid configuration")
     p.add_argument("--repo", default=".", help="repository root (default: current directory)")
+    p.add_argument("--post-status", action="store_true",
+                   help="also set the standards/check status on the checked-out commit (GITHUB_REPOSITORY, GH_TOKEN); "
+                        "for when Actions can't run")
     p.set_defaults(func=cmd_check)
     p = sub.add_parser("sync", help="open or update the standards/update pull request")
     p.add_argument("--repo", default=".", help="repository root (default: current directory)")

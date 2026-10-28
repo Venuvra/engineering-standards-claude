@@ -17,6 +17,10 @@ Minor release (new SHOULD rules only).
   runtime and database versions), TST-009 (hosted CI such as GitHub Actions is optional;
   where it runs it calls the same container command, and every PR reports the result).
 - New guide: `docs/container-testing.md`.
+- `vstd check --post-status` sets the `standards/check` commit status from a local run, marked
+  "(local run)", for when Actions can't run (for example, the organisation's minutes or spending
+  limit ran out). It refuses a working tree with uncommitted changes.
+- `docs/no-actions.md`: the local equivalent of each job the workflow runs (check, sync, release).
 
 ## v0.3.1
 
