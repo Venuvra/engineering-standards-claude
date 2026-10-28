@@ -11,6 +11,10 @@ wording only. Tags `vX.Y.Z` are immutable.
 ## Unreleased
 
 - Rules added, changed or removed: none.
+- `vstd check --post-status` sets the `standards/check` commit status from a local run, marked
+  "(local run)", for when Actions can't run (for example, the organisation's minutes or spending
+  limit ran out). It refuses a working tree with uncommitted changes.
+- `docs/no-actions.md`: the local equivalent of each job the workflow runs (check, sync, release).
 
 ## v0.3.1
 
