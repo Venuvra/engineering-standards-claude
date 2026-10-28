@@ -63,7 +63,10 @@ repository's own check commands from the project section of its `AGENTS.md`.
 
 ## Sync
 
-From a clean checkout of the repository's default branch, up to date with the remote:
+From a clean checkout of the repository's default branch, up to date with the remote. On
+Windows, a repository pinned to v0.4.0 or earlier needs a checkout that keeps LF line endings,
+or the sync reports the managed block as edited by hand:
+`git clone -c core.autocrlf=false https://github.com/<org>/<repo> <repo>-sync`.
 
 ```powershell
 python -I vstd/main.py sync --repo <path to repo> --base <default branch> --dry-run   # diff only

@@ -8,9 +8,16 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
-## Unreleased
+## v0.4.1
+
+Patch release. No rule changes.
 
 - Rules added, changed or removed: none.
+- Windows checkouts work. Git on Windows (`core.autocrlf`) checks files out with CRLF, which made
+  `vstd check` and `vstd sync` report "the managed block was edited by hand (hash mismatch)" on an
+  untouched block. The block check now ignores CRLF, and `vstd sync` starts from the committed
+  bytes of the files it owns, so its PR carries LF only. Repositories pinned to an earlier release
+  sync from a clone made with `git clone -c core.autocrlf=false` once; see `docs/no-actions.md`.
 
 ## v0.4.0
 

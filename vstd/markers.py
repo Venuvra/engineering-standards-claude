@@ -27,7 +27,8 @@ class Block:
 
     @property
     def intact(self) -> bool:
-        return body_hash(self.body) == self.hash
+        # A Windows checkout (core.autocrlf) turns LF into CRLF; that is not an edit.
+        return body_hash(self.body.replace("\r\n", "\n")) == self.hash
 
 
 def body_hash(body: str) -> str:

@@ -53,6 +53,13 @@ class CheckTest(unittest.TestCase):
         self.assertTrue(r.ok, r.format())
         self.assertEqual(r.warnings, [])
 
+    def test_crlf_checkout_is_not_a_hand_edit(self):
+        # Git on Windows (core.autocrlf) checks files out with CRLF; the block is unchanged.
+        path = self.repo / "AGENTS.md"
+        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        r = self.run_check()
+        self.assertTrue(r.ok, r.format())
+
     # Refused reads
     def test_symlinked_agents_md_is_refused_not_followed(self):
         outside = Path(self.tmp.name).parent / f"{Path(self.tmp.name).name}-outside.md"

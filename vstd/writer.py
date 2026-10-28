@@ -91,6 +91,8 @@ def plan_agents_md(repo: Path, ruleset: RuleSet, config: Config) -> Change | Non
                 "AGENTS.md: the managed block was edited by hand (hash mismatch); "
                 "move project rules below the END marker, then restore the block with 'git checkout' or delete it and re-run"
             )
+        if old[block.start : block.end].replace("\r\n", "\n") == new_block:
+            return None  # same block, CRLF only from a Windows checkout (core.autocrlf)
         new = old[: block.start] + new_block + old[block.end :]
     return None if new == old else Change("AGENTS.md", old, new)
 
