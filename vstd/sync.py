@@ -174,20 +174,37 @@ def _files(root: Path) -> dict[str, Path]:
 
 
 def _committed_owned_files(repo: Path) -> dict[str, bytes]:
-    """The files vstd owns as committed at HEAD, byte for byte (no line-ending conversion)."""
-    listing = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only", "HEAD"], cwd=repo, env=child_env(),
+    """The regular files vstd owns as committed at HEAD, byte for byte (no line-ending conversion)."""
+    listing = subprocess.run(["git", "ls-tree", "-r", "-z", "HEAD"], cwd=repo, env=child_env(),
                              capture_output=True, timeout=GIT_TIMEOUT_SECONDS)
     if listing.returncode != 0:
         return {}  # not a Git checkout (or no commit yet): the working tree is all there is
     out = {}
-    for rel in listing.stdout.decode("utf-8", "replace").split("\0"):
-        if rel and owned(rel):
-            blob = subprocess.run(["git", "cat-file", "blob", f"HEAD:{rel}"], cwd=repo, env=child_env(),
-                                  capture_output=True, timeout=GIT_TIMEOUT_SECONDS)
-            if blob.returncode != 0:
-                raise SyncError(f"git cat-file failed for {rel}")
-            out[rel] = blob.stdout
+    for entry in listing.stdout.decode("utf-8", "replace").split("\0"):
+        meta, _, rel = entry.partition("\t")
+        mode = meta.split(" ", 1)[0]
+        # Symlinks (120000) and submodules are never ours to write; skipped folders aren't copied.
+        if mode not in ("100644", "100755") or not owned(rel) or SKIP_DIRS & set(rel.split("/")[:-1]):
+            continue
+        blob = subprocess.run(["git", "cat-file", "blob", f"HEAD:{rel}"], cwd=repo, env=child_env(),
+                              capture_output=True, timeout=GIT_TIMEOUT_SECONDS)
+        if blob.returncode != 0:
+            raise SyncError(f"git cat-file failed for {rel}")
+        out[rel] = blob.stdout
     return out
+
+
+def _restore_committed(root: Path, files: dict[str, bytes]) -> None:
+    """Overwrite regular files in the scratch copy; never write through a symlink."""
+    for rel, data in files.items():
+        dest = root
+        for part in rel.split("/"):
+            dest = dest / part
+            if dest.is_symlink():
+                break
+        else:
+            if dest.is_file():
+                dest.write_bytes(data)
 
 
 def changed_files(original: Path, work: Path) -> dict[str, bytes]:
@@ -332,8 +349,7 @@ def run(
         # is built on HEAD, and a Windows checkout (core.autocrlf) has CRLF where Git has LF.
         committed = tmp / "committed"
         shutil.copytree(repo, committed, symlinks=True, ignore=shutil.ignore_patterns(*SKIP_DIRS))
-        for rel, data in _committed_owned_files(repo).items():
-            (committed / rel).write_bytes(data)
+        _restore_committed(committed, _committed_owned_files(repo))
         work = tmp / "work"
         shutil.copytree(committed, work, symlinks=True)
         renderer = standards_root
