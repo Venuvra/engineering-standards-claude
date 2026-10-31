@@ -7,12 +7,17 @@ repositories, including this one, keep running on GitHub-hosted runners.
 
 ## Self-hosted runners
 
-From the release after v0.4.1, the workflow's `check` and `sync` jobs run on Venuvra's own runners
-(Venuvra/ci-runners) when the organisation variable `RUNNER_TARGET` is set: `local` targets
-`venuvra-local`, `oci` targets `venuvra-oci`. Pull requests from forks always use `ubuntu-24.04`,
-and so does any repository that can't see the variable. Give `RUNNER_TARGET` access to private
-repositories only, so public repositories stay on GitHub-hosted runners. With a runner online,
-nothing below is needed. A repository pinned to an older release gets this through `vstd sync`.
+From v0.5.0, the workflow's `check` and `sync` jobs run on Venuvra's own runners
+(Venuvra/ci-runners) when the variable `RUNNER_TARGET` is visible to the repository: `local`
+targets `venuvra-local`, `oci` targets `venuvra-oci`. Pull requests from forks always use
+`ubuntu-24.04`, and so does any repository that can't see the variable.
+
+Set `RUNNER_TARGET` as a **repository** variable (Settings → Secrets and variables → Actions →
+Variables). On GitHub Free, private repositories can't read organisation variables, so an
+organisation-level `RUNNER_TARGET` never reaches them. Leave it unset on public repositories so
+they stay on GitHub-hosted runners. A repository installed from an older release gets the new
+workflow by running `vstd init --force` from the v0.5.0 checkout: sync never rewrites an
+installed workflow.
 
 ## Without any runner
 
