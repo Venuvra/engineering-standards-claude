@@ -38,7 +38,11 @@ class WorkflowTest(unittest.TestCase):
             self.assertTrue(run.startswith("./scripts/deploy.ps1 "), run)
 
     def test_apply_uses_the_saved_plan(self):
-        self.assertIn("name: tfplan", WORKFLOW[WORKFLOW.index("upload-artifact"):])
+        self.assertIn("-Action plan -For $env:ACTION", WORKFLOW)
+        upload = WORKFLOW[WORKFLOW.rindex("      - if:", 0, WORKFLOW.index("upload-artifact")):]
+        self.assertTrue(upload.startswith("      - if: inputs.target == 'cloud' && inputs.action != 'plan'\n"),
+                        "destroy plans travel too")
+        self.assertIn("name: tfplan", upload)
         self.assertIn("name: tfplan", WORKFLOW[WORKFLOW.index("download-artifact"):])
 
 
@@ -57,18 +61,24 @@ class JenkinsfileTest(unittest.TestCase):
     def test_approval_before_cloud_or_destroy(self):
         self.assertLess(JENKINSFILE.index("stage('Approve')"), JENKINSFILE.index("stage('Run')"))
         self.assertIn("params.TARGET == 'cloud' || params.ACTION == 'destroy'", JENKINSFILE)
+        self.assertIn('-Action plan -For "$ACTION"', JENKINSFILE)
 
 
 class ScriptTest(unittest.TestCase):
     def test_destroy_and_cloud_deploy_need_confirmation(self):
         self.assertIn('Assert-Confirmed "destroy $App"', switch_branch("local/destroy"))
-        self.assertIn('Assert-Confirmed "destroy $App"', switch_branch("cloud/destroy"))
-        self.assertIn('Assert-Confirmed "deploy $App"', switch_branch("cloud/deploy"))
+        saved_plan = SCRIPT[SCRIPT.index("function Invoke-SavedPlan"):SCRIPT.index("switch (")]
+        self.assertIn('Assert-Confirmed "$Verb $App"', saved_plan)
 
-    def test_cloud_deploy_applies_only_a_saved_plan(self):
-        body = switch_branch("cloud/deploy")
-        self.assertIn("No saved plan", body)
-        self.assertIn("'apply', '-input=false', $planFile", body)
+    def test_cloud_deploy_and_destroy_apply_only_a_saved_plan(self):
+        self.assertIn("Invoke-SavedPlan 'deploy'", switch_branch("cloud/deploy"))
+        self.assertIn("Invoke-SavedPlan 'destroy'", switch_branch("cloud/destroy"))
+        self.assertIn("'apply', '-input=false', $planFile", SCRIPT)
+        self.assertNotIn("'destroy', '-input=false'", SCRIPT, "terraform destroy can't take a reviewed plan")
+
+    def test_destroy_plan_is_a_separate_file(self):
+        self.assertIn("if ($planFor -eq 'destroy') { $plan += '-destroy' }", switch_branch("cloud/plan"))
+        self.assertIn("if ($planFor -eq 'destroy') { 'tfplan-destroy' } else { 'tfplan' }", SCRIPT)
 
     def test_local_destroy_keeps_volumes_unless_purge(self):
         self.assertIn("if ($Purge) { $down += '--volumes' }", switch_branch("local/destroy"))

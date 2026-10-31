@@ -20,7 +20,7 @@ pipeline {
             steps {
                 // Single-quoted Groovy: the shell reads the parameters from the environment,
                 // quoted, so no value is ever spliced into the command text.
-                sh 'pwsh -NoProfile -File scripts/deploy.ps1 -Target "$TARGET" -Action plan'
+                sh 'pwsh -NoProfile -File scripts/deploy.ps1 -Target "$TARGET" -Action plan -For "$ACTION"'
             }
         }
 

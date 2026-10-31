@@ -9,7 +9,9 @@
 
     local  Docker Compose (DLV-007). destroy keeps volumes unless -Purge.
     cloud  Terraform or OpenTofu in -InfraDir with remote, locked state (DLV-004).
-           plan writes a saved plan; deploy applies only that plan; destroy needs -Confirm.
+           plan -For deploy|destroy writes and prints a saved plan; deploy and destroy apply
+           only that saved plan, so what a person approved is exactly what runs.
+           Both need -Confirm.
 
   Cloud credentials come from the environment (OIDC in Actions, a credentials binding in
   Jenkins); this script never reads or stores keys (DLV-005).
@@ -18,12 +20,15 @@
   ./scripts/deploy.ps1 -Target local -Action deploy
   ./scripts/deploy.ps1 -Target cloud -Action plan
   ./scripts/deploy.ps1 -Target cloud -Action deploy -Confirm 'deploy myapp'
+  ./scripts/deploy.ps1 -Target cloud -Action plan -For destroy
   ./scripts/deploy.ps1 -Target cloud -Action destroy -Confirm 'destroy myapp'
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('local', 'cloud')][string]$Target,
     [Parameter(Mandatory)][ValidateSet('plan', 'deploy', 'destroy')][string]$Action,
+    # With -Action plan: what the plan is for. Pipelines pass their action here unchanged.
+    [ValidateSet('plan', 'deploy', 'destroy')][string]$For = 'deploy',
     [ValidatePattern('^[a-z0-9][a-z0-9-]*$')][string]$App = (Split-Path -Leaf (Get-Location)).ToLowerInvariant(),
     [string]$Confirm = '',
     [switch]$Purge,
@@ -48,7 +53,18 @@ function Assert-Confirmed([string]$Expected) {
     if ($Confirm -cne $Expected) { throw "This needs -Confirm '$Expected' (DLV-003)." }
 }
 
-$planFile = 'tfplan'
+# A destroy plan gets its own file, so a deploy can never apply one by mistake or the reverse.
+$planFor = if ($Action -eq 'plan') { $For } else { $Action }
+$planFile = if ($planFor -eq 'destroy') { 'tfplan-destroy' } else { 'tfplan' }
+
+function Invoke-SavedPlan([string]$Verb) {
+    Assert-Confirmed "$Verb $App"
+    if (-not (Test-Path (Join-Path $InfraDir $planFile))) {
+        throw "No saved $Verb plan in $InfraDir; run -Action plan -For $Verb and review it first (DLV-004)."
+    }
+    Invoke-Tool $Iac @("-chdir=$InfraDir", 'init', '-input=false')
+    Invoke-Tool $Iac @("-chdir=$InfraDir", 'apply', '-input=false', $planFile)
+}
 
 switch ("$Target/$Action") {
     'local/plan' {
@@ -65,20 +81,15 @@ switch ("$Target/$Action") {
     }
     'cloud/plan' {
         Invoke-Tool $Iac @("-chdir=$InfraDir", 'init', '-input=false')
-        Invoke-Tool $Iac @("-chdir=$InfraDir", 'plan', '-input=false', "-out=$planFile")
+        $plan = @("-chdir=$InfraDir", 'plan', '-input=false', "-out=$planFile")
+        if ($planFor -eq 'destroy') { $plan += '-destroy' }
+        Invoke-Tool $Iac $plan
         Invoke-Tool $Iac @("-chdir=$InfraDir", 'show', '-no-color', $planFile)
     }
     'cloud/deploy' {
-        Assert-Confirmed "deploy $App"
-        if (-not (Test-Path (Join-Path $InfraDir $planFile))) {
-            throw "No saved plan in $InfraDir; run -Action plan and review it first (DLV-004)."
-        }
-        Invoke-Tool $Iac @("-chdir=$InfraDir", 'init', '-input=false')
-        Invoke-Tool $Iac @("-chdir=$InfraDir", 'apply', '-input=false', $planFile)
+        Invoke-SavedPlan 'deploy'
     }
     'cloud/destroy' {
-        Assert-Confirmed "destroy $App"
-        Invoke-Tool $Iac @("-chdir=$InfraDir", 'init', '-input=false')
-        Invoke-Tool $Iac @("-chdir=$InfraDir", 'destroy', '-input=false', '-auto-approve')
+        Invoke-SavedPlan 'destroy'
     }
 }

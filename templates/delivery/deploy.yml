@@ -48,14 +48,15 @@ jobs:
         shell: pwsh
         env:
           TARGET: ${{ inputs.target }}
-        run: ./scripts/deploy.ps1 -Target $env:TARGET -Action plan
-      # The apply job uses exactly this plan (DLV-004). Plan files can hold sensitive values,
-      # so keep the artifact for one day only.
-      - if: inputs.target == 'cloud' && inputs.action == 'deploy'
+          ACTION: ${{ inputs.action }}
+        run: ./scripts/deploy.ps1 -Target $env:TARGET -Action plan -For $env:ACTION
+      # The run job applies exactly this plan, deploy or destroy (DLV-004). Plan files can hold
+      # sensitive values, so keep the artifact for one day only.
+      - if: inputs.target == 'cloud' && inputs.action != 'plan'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: tfplan
-          path: infra/tfplan
+          path: infra/tfplan*
           retention-days: 1
           if-no-files-found: error
 
@@ -73,7 +74,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - if: inputs.target == 'cloud' && inputs.action == 'deploy'
+      - if: inputs.target == 'cloud'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: tfplan

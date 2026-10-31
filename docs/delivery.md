@@ -28,8 +28,9 @@ Actions and from Jenkins does the same thing.
 - **Local** uses Docker Compose (`compose.yaml`). `destroy` needs `-Confirm 'destroy <app>'` and
   keeps volumes unless `-Purge` is given.
 - **Cloud** uses Terraform (or OpenTofu with `-Iac tofu`) in `infra/`, with remote, locked
-  state. `plan` saves `infra/tfplan` and prints it; `deploy` applies only that saved plan and
-  needs `-Confirm 'deploy <app>'`; `destroy` needs `-Confirm 'destroy <app>'`.
+  state. `plan -For deploy` or `plan -For destroy` saves the plan (`infra/tfplan` or
+  `infra/tfplan-destroy`) and prints it. `deploy` and `destroy` apply only that saved plan, so
+  what was approved is what runs; they need `-Confirm 'deploy <app>'` or `-Confirm 'destroy <app>'`.
 - `<app>` defaults to the repository folder name in lower case; pass `-App` to set it.
 
 From PowerShell on your own machine:
@@ -39,13 +40,16 @@ From PowerShell on your own machine:
 ./scripts/deploy.ps1 -Target local -Action destroy -Confirm 'destroy myapp'
 ./scripts/deploy.ps1 -Target cloud -Action plan
 ./scripts/deploy.ps1 -Target cloud -Action deploy -Confirm 'deploy myapp'
+./scripts/deploy.ps1 -Target cloud -Action plan -For destroy
+./scripts/deploy.ps1 -Target cloud -Action destroy -Confirm 'destroy myapp'
 ```
 
 ## GitHub Actions
 
 Run it from Actions → deploy → Run workflow and pick the target and action. The plan job prints
-the plan; the run job starts only for `deploy` or `destroy`, applies the plan the first job saved,
-and uses the `production` environment for anything that touches the cloud or destroys.
+the plan for the chosen action, a destroy included. The run job starts only for `deploy` or
+`destroy`, applies the plan the first job saved, and uses the `production` environment for
+anything that touches the cloud or destroys.
 
 - Add required reviewers to the `production` environment where your GitHub plan allows it. On
   GitHub Free, private repositories have no environment reviewers, so the typed confirmation is
