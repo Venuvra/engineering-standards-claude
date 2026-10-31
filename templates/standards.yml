@@ -18,6 +18,15 @@ on:
           - diff-only
           - open-pr
         default: diff-only
+      runner:
+        description: Where to run (default is the STANDARDS_RUNNER variable, else GitHub-hosted)
+        type: choice
+        options:
+          - default
+          - venuvra-local
+          - venuvra-oci
+          - ubuntu-24.04
+        default: default
 
 permissions:
   contents: read
@@ -34,12 +43,20 @@ jobs:
     # Same name as the commit status sync sets, so one required check covers both.
     name: standards/check
     if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-24.04
+    # STANDARDS_RUNNER (a repository or organization variable) moves the jobs to your own
+    # runners, such as venuvra-local; unset, they run on GitHub. Fork PRs always stay on GitHub.
+    runs-on: >-
+      ${{ (github.event.pull_request.head.repo.full_name != github.repository && github.event_name == 'pull_request' && 'ubuntu-24.04')
+      || (inputs.runner != 'default' && inputs.runner) || vars.STANDARDS_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Self-hosted runner images may lack Python 3.11+, which vstd needs (tomllib).
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
       - name: Read and verify the pinned release
         id: pin
         run: |
@@ -75,7 +92,10 @@ jobs:
     if: >-
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')
       && github.repository_owner == 'Venuvra'
-    runs-on: ubuntu-24.04
+    # Same runner choice as the check job.
+    runs-on: >-
+      ${{ (github.event.pull_request.head.repo.full_name != github.repository && github.event_name == 'pull_request' && 'ubuntu-24.04')
+      || (inputs.runner != 'default' && inputs.runner) || vars.STANDARDS_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: write # push the standards/update branch in THIS repo only
@@ -86,6 +106,10 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
+      # Self-hosted runner images may lack Python 3.11+, which vstd needs (tomllib).
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
       - name: Decide whether to sync
         id: gate
         env:

@@ -27,7 +27,7 @@ said before, then merge.
 
 ## 2. Repository settings
 
-- Actions: allow `actions/checkout` (the only action used). Workflow permissions can stay
+- Actions: allow `actions/checkout` and `actions/setup-python` (the only actions used). Workflow permissions can stay
   read-only by default; the `sync` job asks for its three scopes itself.
 - Settings → Actions → General: allow GitHub Actions to create pull requests, or sync
   can push its branch but not open the PR.
@@ -35,6 +35,13 @@ said before, then merge.
   the `check` job; on sync PRs it is the commit status sync sets, because PRs opened with
   `GITHUB_TOKEN` don't trigger workflows. Other required checks won't run on sync PRs by
   themselves; a maintainer starts them by closing and reopening the PR.
+- Runner: the jobs run on GitHub-hosted `ubuntu-24.04` unless the repository or organization
+  variable `STANDARDS_RUNNER` names another runner label, for example `venuvra-local` or
+  `venuvra-oci` (Venuvra's own runners). Set it with
+  `gh variable set STANDARDS_RUNNER --body venuvra-local --repo <org>/<repo>`. The Run workflow
+  form also has a "Where to run" dropdown for a single run. PRs from forks always run on GitHub,
+  so they never reach your runners. The workflow sets up Python 3.12 itself, so a runner needs
+  only `git`.
 
 ## 3. Day to day
 
