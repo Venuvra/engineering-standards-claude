@@ -1,0 +1,44 @@
+// Venuvra delivery template (DLV-001..008). Copy to Jenkinsfile next to scripts/deploy.ps1;
+// every stage calls that script, so this file holds no deploy logic. Needs PowerShell 7 (pwsh)
+// on the agent, plus Docker for `local` and Terraform or OpenTofu for `cloud`.
+pipeline {
+    agent any
+
+    options {
+        disableConcurrentBuilds() // never run two applies or destroys at once
+        timeout(time: 60, unit: 'MINUTES')
+    }
+
+    parameters {
+        choice(name: 'TARGET', choices: ['local', 'cloud'], description: 'Where to deploy')
+        choice(name: 'ACTION', choices: ['plan', 'deploy', 'destroy'], description: 'What to do (plan changes nothing)')
+        string(name: 'CONFIRM', defaultValue: '', description: "Cloud deploy or any destroy: type exactly 'deploy <app>' or 'destroy <app>'")
+    }
+
+    stages {
+        stage('Plan') {
+            steps {
+                // Single-quoted Groovy: the shell reads the parameters from the environment,
+                // quoted, so no value is ever spliced into the command text.
+                sh 'pwsh -NoProfile -File scripts/deploy.ps1 -Target "$TARGET" -Action plan -For "$ACTION"'
+            }
+        }
+
+        stage('Approve') {
+            when { expression { params.ACTION != 'plan' && (params.TARGET == 'cloud' || params.ACTION == 'destroy') } }
+            steps {
+                // The plan above is in the console log; a person approves exactly that (DLV-003, DLV-004).
+                input message: "Run ${params.ACTION} on ${params.TARGET} with the plan shown above?", ok: 'Approve'
+            }
+        }
+
+        stage('Run') {
+            when { expression { params.ACTION != 'plan' } }
+            steps {
+                // Cloud credentials come from a credentials binding or OIDC set up on the
+                // agent, never from a stored key in this repository (DLV-005).
+                sh 'pwsh -NoProfile -File scripts/deploy.ps1 -Target "$TARGET" -Action "$ACTION" -Confirm "$CONFIRM"'
+            }
+        }
+    }
+}

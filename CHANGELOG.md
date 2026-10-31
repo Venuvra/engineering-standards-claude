@@ -8,6 +8,17 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## v0.6.0
+
+Minor release (new SHOULD rules and a new opt-in profile only).
+
+- Rules added: DLV-001 to DLV-008 in the new `delivery` profile, all SHOULD. They cover deploying
+  and destroying local and cloud environments from one committed script that GitHub Actions and
+  Jenkins both call, with typed confirmation, saved plans and short-lived credentials.
+- The profile is opt-in: add `"delivery"` to `stacks`. `vstd init` never detects it.
+- New templates in `templates/delivery/`: `deploy.ps1`, `deploy.yml` (Actions) and `Jenkinsfile`.
+  See `docs/delivery.md`.
+
 ## v0.5.0
 
 Minor release. No rule changes.
