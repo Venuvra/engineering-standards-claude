@@ -17,6 +17,10 @@ local equivalent that runs with your own GitHub login and reaches the same resul
 
 Nothing here merges: every change still reaches a default branch through a PR you review.
 
+If the organisation has its own runners, the standards workflow can use them instead: set
+`STANDARDS_RUNNER` (v0.5.0 and later; see [adopting.md](adopting.md#2-repository-settings)) and
+everything below becomes unnecessary for that repository.
+
 ## Set up once per shell
 
 Run every command from a clean checkout of the release the repository pins (the `version` in

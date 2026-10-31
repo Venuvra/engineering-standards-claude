@@ -8,6 +8,19 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## v0.5.0
+
+Minor release. No rule changes.
+
+- Rules added, changed or removed: none.
+- The standards workflow can run on your own runners. Set the repository or organization variable
+  `STANDARDS_RUNNER` to a runner label (for example `venuvra-local`); unset, the jobs stay on
+  GitHub-hosted `ubuntu-24.04`. The Run workflow form gains a "Where to run" dropdown, and PRs from
+  forks always run on GitHub. Both jobs now set up Python 3.12 with `actions/setup-python`, so a
+  self-hosted runner needs only `git`. See `docs/adopting.md`.
+- Sync never rewrites the workflow, so a repository gets the new one by running
+  `vstd init --force` from v0.5.0 (it also re-pins to v0.5.0) and merging that PR.
+
 ## v0.4.1
 
 Patch release. No rule changes.
