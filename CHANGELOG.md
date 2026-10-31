@@ -8,7 +8,9 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
-## Unreleased
+## v0.5.0
+
+Minor release. No rule changes.
 
 - Rules added, changed or removed: none.
 - The `standards` workflow runs on Venuvra's self-hosted runners when the organisation variable
