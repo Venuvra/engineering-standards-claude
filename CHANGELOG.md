@@ -8,6 +8,14 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## Unreleased
+
+- Rules added, changed or removed: none.
+- The `standards` workflow runs on Venuvra's self-hosted runners when the organisation variable
+  `RUNNER_TARGET` is set (`local` → `venuvra-local`, `oci` → `venuvra-oci`; see Venuvra/ci-runners).
+  Fork pull requests, and repositories that can't see the variable, stay on `ubuntu-24.04`.
+  Repositories pick this up through their next sync.
+
 ## v0.4.1
 
 Patch release. No rule changes.
