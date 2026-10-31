@@ -1,0 +1,87 @@
+# Venuvra delivery template (DLV-001..008). Copy to .github/workflows/deploy.yml next to
+# scripts/deploy.ps1; every step calls that script, so this file holds no deploy logic.
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to deploy
+        type: choice
+        options:
+          - local
+          - cloud
+        default: local
+      action:
+        description: What to do (plan changes nothing)
+        type: choice
+        options:
+          - plan
+          - deploy
+          - destroy
+        default: plan
+      confirm:
+        description: "Cloud deploy or any destroy: type exactly 'deploy <app>' or 'destroy <app>'"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.target }}
+  cancel-in-progress: false # never cut an apply or destroy short
+
+jobs:
+  plan:
+    # Venuvra's own runners when RUNNER_TARGET is set; `local` needs a runner with Docker.
+    runs-on: ${{ vars.RUNNER_TARGET && format('venuvra-{0}', vars.RUNNER_TARGET) || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # OIDC for the cloud plan; no stored keys (DLV-005)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Plan
+        shell: pwsh
+        env:
+          TARGET: ${{ inputs.target }}
+        run: ./scripts/deploy.ps1 -Target $env:TARGET -Action plan
+      # The apply job uses exactly this plan (DLV-004). Plan files can hold sensitive values,
+      # so keep the artifact for one day only.
+      - if: inputs.target == 'cloud' && inputs.action == 'deploy'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tfplan
+          path: infra/tfplan
+          retention-days: 1
+          if-no-files-found: error
+
+  run:
+    needs: plan
+    if: inputs.action != 'plan'
+    runs-on: ${{ vars.RUNNER_TARGET && format('venuvra-{0}', vars.RUNNER_TARGET) || 'ubuntu-24.04' }}
+    timeout-minutes: 60
+    # Add required reviewers to the "production" environment where the plan allows it (DLV-003).
+    environment: ${{ (inputs.target == 'cloud' || inputs.action == 'destroy') && 'production' || 'local' }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: inputs.target == 'cloud' && inputs.action == 'deploy'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: tfplan
+          path: infra
+      - name: Run
+        shell: pwsh
+        env:
+          TARGET: ${{ inputs.target }}
+          ACTION: ${{ inputs.action }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: ./scripts/deploy.ps1 -Target $env:TARGET -Action $env:ACTION -Confirm $env:CONFIRM

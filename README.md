@@ -18,8 +18,8 @@ The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 
 ## Status
 
-Milestone M1: core rules plus the TypeScript and Python stacks, `vstd check`, `sync`,
-`init`, `rollout`, `eject` and `lint-workflows`. Released as v0.1.0, v0.1.1, v0.2.0, v0.3.1, v0.4.0 and v0.4.1 (v0.3.0 was tagged in error); see the
+Milestone M1: core rules plus the TypeScript and Python stacks and the opt-in `delivery` profile ([docs/delivery.md](docs/delivery.md)), `vstd check`, `sync`,
+`init`, `rollout`, `eject` and `lint-workflows`. Released as v0.1.0, v0.1.1, v0.2.0, v0.3.1, v0.4.0, v0.4.1, v0.5.0 and v0.6.0 (v0.3.0 was tagged in error); see the
 [changelog](CHANGELOG.md).
 
 ## Onboarding and leaving

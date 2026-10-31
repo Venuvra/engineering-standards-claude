@@ -33,7 +33,12 @@ class RuleContentTest(unittest.TestCase):
         self.assertEqual(sum(r.locked for r in core), 22)
         self.assertEqual(len(self.rs.stack_profile("typescript").rules), 12)
         self.assertEqual(len(self.rs.stack_profile("python").rules), 13)
-        self.assertEqual(self.rs.stacks, ("python", "typescript"))
+        self.assertEqual(len(self.rs.stack_profile("delivery").rules), 8)
+        self.assertEqual(self.rs.stacks, ("delivery", "python", "typescript"))
+
+    def test_delivery_is_should_only_until_piloted(self):
+        # Kurt chose SHOULD-only for v0.6.0 (2026-10-31); a MUST here is a MAJOR release.
+        self.assertEqual({r.level for r in self.rs.stack_profile("delivery").rules}, {"SHOULD"})
 
     def test_core_fits_budget(self):
         size = sum(rendered_bytes(p) for p in self.rs.core_profiles())
