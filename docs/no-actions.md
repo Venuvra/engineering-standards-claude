@@ -5,6 +5,17 @@ spending limit run out, or a payment fails. The job then fails with "The job was
 because recent account payments have failed or your spending limit needs to be increased". Public
 repositories, including this one, keep running on GitHub-hosted runners.
 
+## Self-hosted runners
+
+From the release after v0.4.1, the workflow's `check` and `sync` jobs run on Venuvra's own runners
+(Venuvra/ci-runners) when the organisation variable `RUNNER_TARGET` is set: `local` targets
+`venuvra-local`, `oci` targets `venuvra-oci`. Pull requests from forks always use `ubuntu-24.04`,
+and so does any repository that can't see the variable. Give `RUNNER_TARGET` access to private
+repositories only, so public repositories stay on GitHub-hosted runners. With a runner online,
+nothing below is needed. A repository pinned to an older release gets this through `vstd sync`.
+
+## Without any runner
+
 Nothing in the standards needs Actions to work: agents read `AGENTS.md` and `CLAUDE.md` from the
 repository either way. Actions only automates the check, the sync and the release. Each has a
 local equivalent that runs with your own GitHub login and reaches the same result.

@@ -48,5 +48,26 @@ class PushSyncTest(unittest.TestCase):
             self.assertIn("if: steps.gate.outputs.run == 'true'", step)
 
 
+class RunnerTest(unittest.TestCase):
+    """Self-hosted only when the org opts in with RUNNER_TARGET, never for fork PRs; GitHub-hosted otherwise."""
+
+    def runs_on(self, job: str) -> str:
+        body = TEMPLATE[TEMPLATE.index(f"  {job}:"):]
+        return re.search(r"^    runs-on: (.*)$", body, re.M).group(1)
+
+    def test_check_uses_the_org_runner_except_for_forks(self):
+        runs_on = self.runs_on("check")
+        self.assertTrue(runs_on.startswith("${{ vars.RUNNER_TARGET && "), runs_on)
+        self.assertIn("github.event.pull_request.head.repo.full_name == github.repository", runs_on)
+        self.assertIn("format('venuvra-{0}', vars.RUNNER_TARGET)", runs_on)
+        self.assertTrue(runs_on.endswith("|| 'ubuntu-24.04' }}"), runs_on)
+
+    def test_sync_uses_the_org_runner(self):
+        self.assertEqual(
+            self.runs_on("sync"),
+            "${{ vars.RUNNER_TARGET && format('venuvra-{0}', vars.RUNNER_TARGET) || 'ubuntu-24.04' }}",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

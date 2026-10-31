@@ -34,7 +34,9 @@ jobs:
     # Same name as the commit status sync sets, so one required check covers both.
     name: standards/check
     if: github.event_name == 'pull_request' || github.event_name == 'push'
-    runs-on: ubuntu-24.04
+    # Venuvra's self-hosted runners when the org variable RUNNER_TARGET is set (local or oci), except
+    # for fork PRs; GitHub-hosted otherwise. See docs/no-actions.md.
+    runs-on: ${{ vars.RUNNER_TARGET && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && format('venuvra-{0}', vars.RUNNER_TARGET) || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,7 +77,7 @@ jobs:
     if: >-
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')
       && github.repository_owner == 'Venuvra'
-    runs-on: ubuntu-24.04
+    runs-on: ${{ vars.RUNNER_TARGET && format('venuvra-{0}', vars.RUNNER_TARGET) || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
       contents: write # push the standards/update branch in THIS repo only
