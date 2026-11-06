@@ -8,6 +8,14 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## Unreleased
+
+- Rules added, changed or removed: none.
+- New `templates/ci/ci.yml`: an optional starting point for a project's own CI (TST-007 to TST-009)
+  with a Run workflow runner dropdown (`default`, `local`, `oci`, `github`), fork PRs kept on
+  GitHub-hosted runners, and a Postgres service on a random host port. Copy it by hand; nothing
+  installs or checks it. See `docs/ci.md`.
+
 ## v0.6.0
 
 Minor release (new SHOULD rules and a new opt-in profile only).
