@@ -8,7 +8,16 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
-## v0.7.0
+## v0.7.1
+
+Patch release. No rule changes. Use this instead of v0.7.0.
+
+- Rules added, changed or removed: none.
+- The `v0.7.0` tag was pushed on an old commit (the v0.3.1 release), not on the v0.7.0 release
+  merge, so its release check failed and it was never published. Tags can't move; v0.7.1 carries
+  the v0.7.0 changes below unchanged.
+
+## v0.7.0 (tagged in error, not published)
 
 Minor release. No rule changes.
 
