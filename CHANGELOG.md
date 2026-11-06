@@ -8,6 +8,12 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## Unreleased
+
+- Rules added, changed or removed: none.
+- `docs/no-actions.md`: the OCI runner (`RUNNER_TARGET=oci` → `venuvra-oci`) is now in service
+  next to `venuvra-local`, with when to pick each, capacity, and the arm64 note.
+
 ## v0.6.0
 
 Minor release (new SHOULD rules and a new opt-in profile only).

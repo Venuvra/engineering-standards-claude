@@ -12,6 +12,20 @@ From v0.5.0, the workflow's `check` and `sync` jobs run on Venuvra's own runners
 targets `venuvra-local`, `oci` targets `venuvra-oci`. Pull requests from forks always use
 `ubuntu-24.04`, and so does any repository that can't see the variable.
 
+Both targets are in service (the OCI runner since November 2026):
+
+| `RUNNER_TARGET` | Label | Where | Arch | Concurrent jobs |
+| --- | --- | --- | --- | --- |
+| `local` | `venuvra-local` | Kubernetes on a workstation, one fresh pod per job | x64 | up to 3 |
+| `oci` | `venuvra-oci` | One always-on VM in Oracle Cloud | arm64 | 2 |
+
+Pick `oci` when the job must run while the workstation is off; switch before turning it off,
+because jobs already queued for `local` wait there (and fail after 24 hours) until re-run. The
+two pools are separate: idle `local` capacity never takes a job aimed at `oci`. The OCI runner is
+arm64, so an image built there is arm64; under TST-008 that matches an arm64 deploy target, and an
+x64 target should build on `local` or GitHub-hosted instead. Jobs on the OCI runner can't use
+`sudo`, so a tool the job needs must already be installed on the VM (see Venuvra/ci-runners).
+
 Set `RUNNER_TARGET` as a **repository** variable (Settings → Secrets and variables → Actions →
 Variables). On GitHub Free, private repositories can't read organisation variables, so an
 organisation-level `RUNNER_TARGET` never reaches them. Leave it unset on public repositories so
