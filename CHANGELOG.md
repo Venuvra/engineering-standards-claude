@@ -11,6 +11,8 @@ wording only. Tags `vX.Y.Z` are immutable.
 ## Unreleased
 
 - Rules added, changed or removed: none.
+- `docs/no-actions.md`: the OCI runner (`RUNNER_TARGET=oci` → `venuvra-oci`) is now in service
+  next to `venuvra-local`, with when to pick each, capacity, and the arm64 note.
 - New `templates/ci/ci.yml`: an optional starting point for a project's own CI (TST-007 to TST-009)
   with a Run workflow runner dropdown (`default`, `local`, `oci`, `github`), fork PRs kept on
   GitHub-hosted runners, and a Postgres service on a random host port. Copy it by hand; nothing
