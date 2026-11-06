@@ -99,7 +99,7 @@ Owned by this repository; sync never rewrites anything outside the venuvra-stand
 This repo is public and is the source of the rules above. Keep it free of private details.
 
 - Tests: `python3 -I -m unittest discover -s tests -t .` (stdlib only; no third-party packages, ever).
-- Self-check: `python3 -I vstd/main.py check --repo .` and `python3 -I vstd/main.py lint-workflows .github/workflows templates/standards.yml templates/delivery/deploy.yml`.
+- Self-check: `python3 -I vstd/main.py check --repo .` and `python3 -I vstd/main.py lint-workflows .github/workflows templates/standards.yml templates/delivery/deploy.yml templates/ci/ci.yml`.
 - After changing `rules/` or `vstd/render.py`: re-render with `python3 -I vstd/main.py sync --local --repo .`, and update the golden files with `VSTD_UPDATE_GOLDEN=1 python3 -I -m unittest discover -s tests -t . -k Golden`. Review the golden diff; it is what every repository will receive.
 - Rule changes follow `docs/releasing.md`: a released rule ID is never reused, and MUST changes are MAJOR.
 - Never name private Venuvra repositories, people's details or internal hosts in `rules/` or `docs/`; `tests/test_content_scan.py` enforces part of this.

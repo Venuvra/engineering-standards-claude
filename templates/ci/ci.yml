@@ -1,0 +1,62 @@
+# Venuvra CI template (TST-007..009). Copy to .github/workflows/ci.yml and replace the Check
+# step's command with the project's one check command. The runner choice matches the standards
+# workflow: RUNNER_TARGET (repository variable) picks Venuvra's own runners; see no-actions.md.
+name: ci
+
+on:
+  push:
+    branches: [main] # your default branch
+  pull_request:
+  # Start from a phone: Actions > ci > Run workflow.
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "Runner target (default = repo variable RUNNER_TARGET, else GitHub-hosted)"
+        type: choice
+        options:
+          - default
+          - local
+          - oci
+          - github
+        default: default
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # Only PR runs cancel each other; a newer push never kills a running default-branch build.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    # Target = the Run workflow input unless it is `default`, else vars.RUNNER_TARGET, else github:
+    #   local / oci, same-repo event   -> venuvra-local / venuvra-oci
+    #   local / oci, fork pull request -> ubuntu-24.04 (fork code never reaches our runners)
+    #   github, unset or anything else -> ubuntu-24.04
+    runs-on: ${{ contains(fromJSON('["local","oci"]'), (inputs.runner != 'default' && inputs.runner) || vars.RUNNER_TARGET || 'github') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && format('venuvra-{0}', (inputs.runner != 'default' && inputs.runner) || vars.RUNNER_TARGET) || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    # Delete this service and the step that reads its port if the project has no database.
+    services:
+      postgres:
+        image: postgres:16 # same version as the deploy target (TST-008)
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci # throwaway service container, never a real credential
+          POSTGRES_DB: ci
+        # Random host port: a runner VM can run several jobs at once, so a fixed 5432 would clash.
+        ports: ["5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Point the tests at the Postgres service
+        env:
+          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
+        # Standard libpq variables; build a URL from them if the tests need one.
+        run: printf 'PGHOST=localhost\nPGPORT=%s\nPGUSER=ci\nPGPASSWORD=ci\nPGDATABASE=ci\n' "$PG_PORT" >> "$GITHUB_ENV"
+      # The same one command a person runs locally (TST-007, TST-009); report its result in the PR.
+      - name: Check
+        run: ./scripts/check.sh
