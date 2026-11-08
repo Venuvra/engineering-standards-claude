@@ -1,0 +1,175 @@
+name: rollout
+
+# Runs `vstd rollout` from a release tag: one onboarding PR per listed repository.
+# Started by hand only. It never merges, never pushes to a default branch, and changes
+# a repository setting only when "Actions PR setting" is set to yes. It writes to other
+# repositories with a GitHub App token (preferred) or a fine-grained PAT, kept in the
+# `rollout` environment. Setup and permissions: docs/rollout.md, "From GitHub Actions".
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Release tag to roll out (vX.Y.Z)
+        type: string
+        required: true
+      repos:
+        description: Repositories, comma-separated (owner/name or just name)
+        type: string
+        required: true
+      mode:
+        description: What the rollout should do
+        type: choice
+        options:
+          - dry-run
+          - open-prs
+        default: dry-run
+      actions_pr_setting:
+        description: Also turn on "Allow GitHub Actions to create and approve pull requests"
+        type: choice
+        options:
+          - "no"
+          - "yes"
+        default: "no"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rollout
+  cancel-in-progress: false
+
+jobs:
+  rollout:
+    # GitHub-hosted: this repository is public, so it isn't blocked by private-repo billing, and
+    # Venuvra's self-hosted runners stay off a public repository. See docs/no-actions.md.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Holds the App key or PAT. Add yourself as a required reviewer there to approve each run.
+    environment: rollout
+    steps:
+      - name: Check the inputs
+        id: plan
+        env:
+          RELEASE: ${{ inputs.release }}
+          REPOS: ${{ inputs.repos }}
+          SKIP: ${{ vars.ROLLOUT_SKIP }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          python3 -I - <<'EOF'
+          import os, re, sys
+
+          def fail(msg):
+              print(f"::error::{msg}")
+              sys.exit(1)
+
+          if not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", os.environ["RELEASE"]):
+              fail(f"release must be vMAJOR.MINOR.PATCH, got {os.environ['RELEASE']!r}")
+          owner = os.environ["OWNER"]
+
+          def slugs(text):
+              out = []
+              for item in re.split(r"[,\s]+", text):
+                  item = item.strip()
+                  if not item:
+                      continue
+                  if "/" not in item:
+                      item = f"{owner}/{item}"
+                  if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", item):
+                      fail(f"not a repository name: {item!r}")
+                  if item.split("/")[0].lower() != owner.lower():
+                      fail(f"{item} is outside {owner}; rollout only writes to {owner} repositories")
+                  if item.lower() not in (s.lower() for s in out):
+                      out.append(item)
+              return out
+
+          skip = {s.lower() for s in slugs(os.environ.get("SKIP", ""))}
+          repos = []
+          for repo in slugs(os.environ["REPOS"]):
+              if repo.lower() in skip:
+                  print(f"SKIPPED  {repo}: listed in the ROLLOUT_SKIP variable")
+              else:
+                  repos.append(repo)
+          if not repos:
+              fail("no repositories left to roll out")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"repos={','.join(repos)}\n")
+              fh.write(f"names={','.join(r.split('/')[1] for r in repos)}\n")
+          print("Rolling out to: " + ", ".join(repos))
+          EOF
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.release }}
+          persist-credentials: false
+
+      # Preferred: a GitHub App installed on the organisation. The token lasts an hour, covers
+      # only the listed repositories and only these permissions, and is revoked when the job ends.
+      - name: GitHub App token
+        id: app
+        if: vars.ROLLOUT_APP_CLIENT_ID != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.ROLLOUT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.ROLLOUT_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.plan.outputs.names }}
+          # A dry run only reads. Empty values are left out of the token.
+          permission-contents: ${{ inputs.mode == 'open-prs' && 'write' || 'read' }}
+          permission-pull-requests: ${{ inputs.mode == 'open-prs' && 'write' || 'read' }}
+          permission-workflows: ${{ inputs.mode == 'open-prs' && 'write' || '' }}
+          permission-checks: read
+          permission-administration: ${{ inputs.actions_pr_setting == 'yes' && inputs.mode == 'open-prs' && 'write' || '' }}
+
+      - name: Pick the token and commit author
+        env:
+          APP_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          PAT: ${{ secrets.ROLLOUT_PAT }}
+        run: |
+          set -eu
+          if [ -n "$APP_TOKEN" ]; then
+            token=$APP_TOKEN
+            name="$APP_SLUG[bot]"
+            id=$(GH_TOKEN=$token gh api "users/$APP_SLUG%5Bbot%5D" --jq .id)
+            echo "Using the GitHub App $APP_SLUG"
+          elif [ -n "$PAT" ]; then
+            token=$PAT
+            name=$(GH_TOKEN=$token gh api user --jq .login)
+            id=$(GH_TOKEN=$token gh api user --jq .id)
+            echo "Using the fine-grained PAT of $name"
+          else
+            echo "::error::No token. Set the ROLLOUT_APP_CLIENT_ID variable and ROLLOUT_APP_PRIVATE_KEY secret, or the ROLLOUT_PAT secret, in the rollout environment (docs/rollout.md)."
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          git config user.name "$name"
+          git config user.email "$id+$name@users.noreply.github.com"
+          echo "ROLLOUT_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: vstd rollout
+        env:
+          REPOS: ${{ steps.plan.outputs.repos }}
+          MODE: ${{ inputs.mode }}
+          SETTING: ${{ inputs.actions_pr_setting }}
+        run: |
+          set -eu
+          args="--repos $REPOS"
+          if [ "$MODE" = "dry-run" ]; then
+            args="$args --dry-run"
+          elif [ "$SETTING" = "yes" ]; then
+            args="$args --allow-actions-prs"
+          fi
+          set +e
+          # shellcheck disable=SC2086 # args is a flag list built above; REPOS has no spaces
+          GH_TOKEN=$ROLLOUT_TOKEN python3 -I vstd/main.py rollout $args > "$RUNNER_TEMP/rollout.txt" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/rollout.txt"
+          {
+            echo "### vstd rollout ($MODE)"
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/rollout.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
