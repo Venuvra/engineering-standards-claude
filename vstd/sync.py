@@ -32,7 +32,7 @@ from pathlib import Path
 from vstd import config as config_mod
 from vstd import github
 from vstd.rules import RuleError, RuleSet, load_rules
-from vstd.writer import SKIP_DIRS, WRITABLE_NAMES
+from vstd.writer import SKIP_DIRS, WRITABLE_NAMES, WRITABLE_PATHS
 
 CENTRAL_URL = "https://github.com/Venuvra/engineering-standards-claude.git"
 BRANCH = "standards/update"
@@ -159,7 +159,7 @@ def set_pin(text: str, version: Version, commit: str) -> str:
 
 
 def owned(rel: str) -> bool:
-    return rel == config_mod.CONFIG_PATH.as_posix() or Path(rel).name in WRITABLE_NAMES
+    return rel == config_mod.CONFIG_PATH.as_posix() or Path(rel).name in WRITABLE_NAMES or rel in WRITABLE_PATHS
 
 
 def _files(root: Path) -> dict[str, Path]:

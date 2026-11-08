@@ -1,7 +1,9 @@
 # Adopting the standards in a repository
 
-The result: Codex reads the shared rules from `AGENTS.md`, Claude Code reads the same file
-through `@AGENTS.md` in `CLAUDE.md`, and a weekly job proposes updates as a pull request.
+The result: Codex and Antigravity read the shared rules from `AGENTS.md`, Claude Code reads
+the same file through `@AGENTS.md` in `CLAUDE.md`, Gemini CLI reads it through
+`.gemini/settings.json`, and a weekly job proposes updates as a pull request. See
+[agents.md](agents.md) for each assistant.
 
 ## 1. Onboard (one PR, pushed by a person)
 
@@ -20,6 +22,7 @@ cd ../your-repo && git switch -c standards/onboard && git add -A && git status
 | `.github/workflows/standards.yml` | `check` on PRs and pushes; `sync` weekly and on a push that changes the config |
 | `AGENTS.md` | Managed block first, then your project section (existing text is kept below the block) |
 | `CLAUDE.md` | Line 1 `@AGENTS.md`, then Claude Code-only notes (existing text is kept) |
+| `.gemini/settings.json` | `context.fileName` lists `AGENTS.md` first, so Gemini CLI loads it (existing settings are kept) |
 
 Push the branch and open the PR yourself: `GITHUB_TOKEN` can't create workflow files, so
 the first PR can't come from the bot. Review that the project section still says what it
@@ -41,6 +44,8 @@ said before, then merge.
 - Put project rules in the project section of `AGENTS.md`, below the END marker. Never edit
   the block; `vstd check` fails on a hand edit.
 - Claude Code-only notes go below the import in `CLAUDE.md`. Don't copy rule lines there.
+- Gemini or Antigravity notes go in the project section of `AGENTS.md` too. Don't copy rule
+  lines into `GEMINI.md` or `.agents/rules/`; `vstd check` fails on them.
 - Need a different SHOULD rule? Add an override; see [overrides.md](overrides.md).
 - Nested `AGENTS.md` files (for example `web/AGENTS.md`) are project-owned. Codex reads them only
   when started in that folder. Set `nested_parity = true` so Claude Code reads them too.
@@ -61,8 +66,10 @@ said before, then merge.
 
 - Codex: `codex --ask-for-approval never "Summarize the current instructions."`
 - Claude Code: `/context` lists the memory files it loaded; `/memory` opens them.
+- Gemini CLI: `/memory show` prints the loaded context; it should start with the `AGENTS.md` block.
+- Antigravity: ask the agent to summarize its current instructions.
 
 ## Leaving
 
 `python3 -I vstd/main.py eject --repo ../your-repo` keeps the rules as plain text in
-`AGENTS.md`, keeps `CLAUDE.md`, and removes the config and workflow.
+`AGENTS.md`, keeps `CLAUDE.md` and `.gemini/settings.json`, and removes the config and workflow.

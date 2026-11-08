@@ -11,6 +11,20 @@ wording only. Tags `vX.Y.Z` are immutable.
 ## Unreleased
 
 - Rules added, changed or removed: none.
+- Gemini CLI and Google Antigravity (`agy`) read the same `AGENTS.md` block as Codex and Claude
+  Code. No rule text is copied: Antigravity reads `AGENTS.md` itself, and Gemini CLI reads it
+  once `.gemini/settings.json` lists it under `context.fileName`. See `docs/agents.md`.
+- New config key `gemini` (default `false`). With `gemini = true`, sync creates
+  `.gemini/settings.json`, or adds `AGENTS.md` to an existing one and keeps its other settings.
+  `vstd init` now writes `gemini = true` into new configs. Repositories already onboarded opt in
+  by adding `gemini = true` after they are on this release; the update PR itself never adds
+  the file, because the sync running from an older release refuses files it doesn't own.
+  To roll back below this release, delete the `gemini` line first; older releases reject it.
+- `vstd check` now also fails on rule ID lines in `GEMINI.md`, `.agents/AGENTS.md`,
+  `.agents/GEMINI.md`, `.agents/rules/` and `.agent/rules/`, fails when `gemini = true` and
+  `.gemini/settings.json` doesn't list `AGENTS.md`, warns about a root `GEMINI.md` (Antigravity
+  may load it in place of `AGENTS.md`), and warns on MUST-rule exception wording in rules folders.
+- The `AGENTS.md` size limit is now 24,000 bytes (was 24,576), Antigravity's per-file limit.
 - New `.github/workflows/rollout.yml` in this repository: runs `vstd rollout` from a release tag
   from Actions → Run workflow, with dropdowns for dry run or open PRs and for the Actions PR
   setting. It writes to other repositories with a GitHub App token (or a fine-grained PAT) kept in

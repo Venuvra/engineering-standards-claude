@@ -18,7 +18,7 @@ from vstd.markers import MarkerError, find_block
 from vstd.rules import RuleSet
 
 BLOCK_BUDGET = 16 * 1024
-AGENTS_BUDGET = 24 * 1024
+AGENTS_BUDGET = 24_000  # Antigravity truncates a rule file at 24,000 bytes
 _SYNC_FIX = "run the standards workflow manually, or 'vstd sync' locally, and merge the PR"
 _TRIPWIRE = re.compile(r"\b(ignore|ignored|skip|skipped|disable|disabled|except|exempt|override|overridden|does not apply|doesn't apply|n/a)\b", re.I)
 _USES = re.compile(r"^\s*(?:-\s*)?uses:\s*['\"]?(?P<ref>[A-Za-z0-9._/@:-]+)")
@@ -123,7 +123,7 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
                     report.error("AGENTS.md", f"block is v{block.version} but standards.toml pins v{cfg.version}", _SYNC_FIX)
         size = len(agents.encode())
         if size > AGENTS_BUDGET:
-            report.error("AGENTS.md", f"is {size} bytes; the limit is {AGENTS_BUDGET} so Codex's 32 KiB default still loads nested files", "move detail into docs and link to it")
+            report.error("AGENTS.md", f"is {size} bytes; the limit is {AGENTS_BUDGET} so Antigravity doesn't truncate it and Codex's 32 KiB default still loads nested files", "move detail into docs and link to it")
         outside = agents if block is None else agents[: block.start] + agents[block.end :]
         _tripwire(report, "AGENTS.md", outside, must_ids)
 
@@ -145,6 +145,10 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
             report.error(rel, "contains rule ID lines; shared rules belong only in the AGENTS.md block", "delete those lines; Claude Code already gets them through the import")
         _tripwire(report, rel, text, must_ids)
 
+    # Gemini CLI and Antigravity. Antigravity (agy) reads AGENTS.md itself; Gemini CLI needs
+    # .gemini/settings.json to list it. Their own files carry notes only, never rule lines.
+    _check_gemini(repo, report, cfg, rule_line, must_ids)
+
     # Files Codex or Claude Code would read differently.
     for rel, filenames in _walk(repo):
         here = "" if rel == Path(".") else rel.as_posix() + "/"
@@ -152,10 +156,14 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
             report.error(f"{here}AGENTS.override.md", "makes Codex ignore AGENTS.md in this directory (Claude Code never reads it)", "delete it; keep personal overrides in ~/.codex")
         if here and "AGENTS.md" in filenames:
             report.warn(f"{here}AGENTS.md", "nested AGENTS.md (project-owned; Codex loads it only when started in this directory)", "set nested_parity = true so Claude Code loads it too")
-        if rel.parts[:2] == (".claude", "rules"):
+        if rel.parts[:2] in ((".claude", "rules"), (".agents", "rules"), (".agent", "rules")):
             for name in filenames:
-                if name.endswith(".md") and rule_line.search(_read(repo, f"{here}{name}", report) or ""):
-                    report.error(f"{here}{name}", "contains rule ID lines; Codex has no equivalent of .claude/rules", "keep shared rules in the AGENTS.md block only")
+                if not name.endswith(".md"):
+                    continue
+                text = _read(repo, f"{here}{name}", report) or ""
+                if rule_line.search(text):
+                    report.error(f"{here}{name}", "contains rule ID lines; shared rules belong only in the AGENTS.md block, which every assistant reads", "delete those lines and keep shared rules in the AGENTS.md block only")
+                _tripwire(report, f"{here}{name}", text, must_ids)
 
     # Anything sync would still change (stacks, overrides, nested parity, import).
     if cfg and block is not None and block.intact and block.version == cfg.version:
@@ -171,6 +179,39 @@ def check(repo: Path | str, ruleset: RuleSet, tool_version: str, today: dt.date 
 
     _check_workflow_pins(repo, report)
     return report
+
+
+GEMINI_NOTE_FILES = ("GEMINI.md", ".agents/AGENTS.md", ".agents/GEMINI.md")
+
+
+def _check_gemini(repo: Path, report: Report, cfg, rule_line: re.Pattern, must_ids: set[str]) -> None:
+    for rel in GEMINI_NOTE_FILES:
+        text = _read(repo, rel, report)
+        if text is None:
+            continue
+        if rule_line.search(text):
+            report.error(rel, "contains rule ID lines; shared rules belong only in the AGENTS.md block", "delete those lines; Gemini CLI and Antigravity already read AGENTS.md")
+        _tripwire(report, rel, text, must_ids)
+    if (repo / "GEMINI.md").is_file():
+        report.warn("GEMINI.md", "Antigravity documents loading AGENTS.md or GEMINI.md per folder, so it may read this file in place of AGENTS.md",
+                    "move these notes into the project section of AGENTS.md and delete GEMINI.md")
+
+    rel = writer.GEMINI_SETTINGS_PATH
+    if rel in report.refused:
+        return
+    text = _read(repo, rel, report)
+    if text is None:
+        if cfg and cfg.gemini and rel not in report.refused:
+            report.error(rel, "missing, so Gemini CLI reads only GEMINI.md and misses the shared rules", _SYNC_FIX)
+        return
+    names = writer.gemini_context_files(text)
+    if names is None:
+        # Not plain JSON (Gemini CLI allows comments), so vstd won't rewrite it. Accept a listed AGENTS.md.
+        if '"AGENTS.md"' not in text:
+            report.error(rel, "isn't plain JSON vstd can update, and doesn't list AGENTS.md", 'add "AGENTS.md" to context.fileName by hand')
+    elif "AGENTS.md" not in names:
+        fix = _SYNC_FIX if cfg and cfg.gemini else 'set gemini = true in .venuvra/standards.toml and re-sync, or add "AGENTS.md" to context.fileName'
+        report.error(rel, f"context.fileName is {names}, so Gemini CLI misses the shared rules in AGENTS.md", fix)
 
 
 def _tripwire(report: Report, rel: str, text: str, must_ids: set[str]) -> None:

@@ -1,4 +1,4 @@
-"""Render the managed block for AGENTS.md and the CLAUDE.md wrapper.
+"""Render the managed block for AGENTS.md, the CLAUDE.md wrapper and the Gemini CLI settings.
 
 Output is deterministic: the same rules and config always give the same bytes
 (UTF-8, LF line endings, no timestamps).
@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from vstd.config import Config
 from vstd.markers import BEGIN_PREFIX, END_LINE, body_hash
+import json
+
 from vstd.rules import Profile, RuleSet
 
 CLAUDE_IMPORT = "@AGENTS.md"
@@ -31,6 +33,18 @@ CLAUDE_MD = (
     "\n"
     "<!-- Claude Code-specific notes go below. Shared and project rules live in AGENTS.md. -->\n"
 )
+
+GEMINI_SETTINGS_PATH = ".gemini/settings.json"
+# Gemini CLI reads only GEMINI.md unless context.fileName says otherwise. AGENTS.md first, so the
+# shared rules load before any Gemini-only notes. Antigravity reads AGENTS.md without this file.
+GEMINI_CONTEXT_FILES = ("AGENTS.md", "GEMINI.md")
+
+
+def render_json(data) -> str:
+    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+
+
+GEMINI_SETTINGS = render_json({"context": {"fileName": list(GEMINI_CONTEXT_FILES)}})
 
 
 def _profile_lines(profile: Profile) -> list[str]:
