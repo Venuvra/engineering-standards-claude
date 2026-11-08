@@ -1,5 +1,6 @@
 """Safe writer tests (AC-05, AC-08) and refusal cases."""
 
+import json
 import os
 import tempfile
 import unittest
@@ -35,6 +36,57 @@ class _RepoCase(unittest.TestCase):
         changes = writer.plan(self.repo, RULES, cfg)
         writer.apply(self.repo, changes)
         return changes
+
+
+GEM = Config(version="0.1.0", commit="0" * 40, stacks=("typescript",), gemini=True)
+
+
+class GeminiSettingsTest(_RepoCase):
+    def test_off_by_default(self):
+        self.sync()
+        self.assertFalse((self.repo / ".gemini").exists())
+
+    def test_created_when_on(self):
+        changes = self.sync(GEM)
+        self.assertIn(".gemini/settings.json", [c.path for c in changes])
+        self.assertEqual(json.loads(self.read(".gemini/settings.json")), {"context": {"fileName": ["AGENTS.md", "GEMINI.md"]}})
+        self.assertEqual(writer.plan(self.repo, RULES, GEM), [])
+
+    def test_existing_settings_kept_and_agents_md_added_first(self):
+        self.write(".gemini/settings.json", '{"theme": "Dracula", "context": {"fileName": "GEMINI.md", "includeDirectories": ["../lib"]}}')
+        self.sync(GEM)
+        data = json.loads(self.read(".gemini/settings.json"))
+        self.assertEqual(data["theme"], "Dracula")
+        self.assertEqual(data["context"], {"fileName": ["AGENTS.md", "GEMINI.md"], "includeDirectories": ["../lib"]})
+
+    def test_settings_without_context_get_default_list(self):
+        self.write(".gemini/settings.json", '{"general": {"vimMode": true}}\n')
+        self.sync(GEM)
+        self.assertEqual(json.loads(self.read(".gemini/settings.json"))["context"]["fileName"], ["AGENTS.md", "GEMINI.md"])
+
+    def test_v1_context_file_name_updated_in_place(self):
+        self.write(".gemini/settings.json", '{"contextFileName": "NOTES.md"}\n')
+        self.sync(GEM)
+        self.assertEqual(json.loads(self.read(".gemini/settings.json")), {"contextFileName": ["AGENTS.md", "NOTES.md"]})
+
+    def test_already_listed_is_untouched(self):
+        text = '{ "context": { "fileName": ["GEMINI.md", "AGENTS.md"] } }'
+        self.write(".gemini/settings.json", text)
+        self.sync(GEM)
+        self.assertEqual(self.read(".gemini/settings.json"), text)
+
+    def test_json_with_comments_is_left_alone(self):
+        text = '{\n  // team settings\n  "theme": "Dracula"\n}\n'
+        self.write(".gemini/settings.json", text)
+        self.sync(GEM)
+        self.assertEqual(self.read(".gemini/settings.json"), text)
+
+    def test_symlinked_settings_refused(self):
+        (self.repo / "elsewhere.json").write_text("{}")
+        (self.repo / ".gemini").mkdir()
+        os.symlink(self.repo / "elsewhere.json", self.repo / ".gemini" / "settings.json")
+        with self.assertRaises(writer.WriterError):
+            writer.plan(self.repo, RULES, GEM)
 
 
 class WriterTest(_RepoCase):

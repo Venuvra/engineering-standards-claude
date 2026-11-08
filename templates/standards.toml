@@ -9,6 +9,8 @@ upgrade = "minor"
 stacks = [$stacks]
 # Set to true to add a CLAUDE.md next to every nested AGENTS.md so Claude Code reads it too.
 nested_parity = false
+# Write .gemini/settings.json so Gemini CLI reads AGENTS.md too. Antigravity (agy) reads AGENTS.md without it.
+gemini = true
 
 # A SHOULD rule can be overridden with a reason and an approver; MUST rules can't.
 # [[overrides]]

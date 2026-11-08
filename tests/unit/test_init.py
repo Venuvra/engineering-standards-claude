@@ -63,7 +63,7 @@ class InitTest(_Repo):
     def test_init_on_empty_repo(self):
         result = self.init()
         self.assertEqual(result.stacks, ())
-        self.assertEqual(sorted(result.written), sorted([".venuvra/standards.toml", WORKFLOW_PATH, "AGENTS.md", "CLAUDE.md"]))
+        self.assertEqual(sorted(result.written), sorted([".venuvra/standards.toml", WORKFLOW_PATH, "AGENTS.md", "CLAUDE.md", ".gemini/settings.json"]))
         cfg = config_mod.load(self.repo, RULES)
         self.assertTrue(cfg.ok, cfg.errors)
         self.assertEqual((cfg.config.version, cfg.config.commit, cfg.config.stacks), ("0.1.0", SHA, ()))

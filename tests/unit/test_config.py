@@ -49,6 +49,7 @@ class ValidConfigTest(unittest.TestCase):
         self.assertTrue(r.ok, r.errors)
         self.assertEqual(r.config.upgrade, "minor")
         self.assertFalse(r.config.nested_parity)
+        self.assertFalse(r.config.gemini)
 
 
 class ValidationRowsTest(unittest.TestCase):
@@ -65,6 +66,7 @@ class ValidationRowsTest(unittest.TestCase):
 
     def test_wrong_type(self):
         self.assertError(BASE + 'nested_parity = "yes"\n', "'nested_parity' must be true or false")
+        self.assertError(BASE + 'gemini = 1\n', "'gemini' must be true or false")
 
     def test_schema_not_1(self):
         self.assertError(BASE.replace("schema = 1", "schema = 2"), "'schema' must be 1")

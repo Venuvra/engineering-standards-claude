@@ -1,14 +1,17 @@
 # Venuvra engineering standards
 
 Central source of truth for the engineering rules that Venuvra repositories give to
-AI coding assistants. Codex reads them from each repo's `AGENTS.md`; Claude Code reads
-the same file through a one-line `@AGENTS.md` import in `CLAUDE.md`.
+AI coding assistants. Codex and Google Antigravity (`agy`) read them from each repo's
+`AGENTS.md`; Claude Code reads the same file through a one-line `@AGENTS.md` import in
+`CLAUDE.md`; Gemini CLI reads it because `.gemini/settings.json` lists it as a context file.
+See [docs/agents.md](docs/agents.md).
 
 The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 
 ## Docs
 
 - [Adopting the standards in a repository](docs/adopting.md)
+- [Which file each AI assistant reads](docs/agents.md)
 - [Rolling out across repositories](docs/rollout.md)
 - [Overrides](docs/overrides.md)
 - [Container test gate](docs/container-testing.md)
@@ -33,7 +36,8 @@ python3 -I vstd/main.py init --repo ../my-repo --stacks typescript,python
 ```
 
 `init` writes `.venuvra/standards.toml`, `.github/workflows/standards.yml`, and the
-first-run `AGENTS.md` / `CLAUDE.md` into the working tree and lists every file. Existing
+first-run `AGENTS.md` / `CLAUDE.md` (and `.gemini/settings.json`, since new configs set
+`gemini = true`) into the working tree and lists every file. Existing
 `AGENTS.md` and `CLAUDE.md` content is kept. An existing config or standards workflow is
 kept unless you pass `--force`. A person pushes this first PR, because `GITHUB_TOKEN`
 can't create workflow files.
@@ -64,7 +68,8 @@ The standards workflow in each repository checks out this repo at the commit pin
   `upgrade` policy allows: `manual` stays put, `patch` takes new patches, `minor` takes new
   minors and patches. A new major is never proposed; the PR and log mention it instead.
 - It renders into a scratch copy with the target release's own `vstd`, so the working tree
-  is never written. Only `.venuvra/standards.toml`, `AGENTS.md` and `CLAUDE.md` files may change.
+  is never written. Only `.venuvra/standards.toml`, `AGENTS.md` and `CLAUDE.md` files, and
+  `.gemini/settings.json` at the root, may change.
 - If nothing changed, it stops. Otherwise it commits to `standards/update` (fast-forward
   only, never a force-push), opens or updates one PR, and sets the `standards/check` commit
   status. It never merges.

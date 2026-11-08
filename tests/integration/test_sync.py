@@ -335,6 +335,15 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(sorted(r.changes), ["AGENTS.md"])
         self.assertTrue(self.api.pulls[0]["title"].startswith("Re-sync"))
 
+    def test_turning_gemini_on_adds_its_settings(self):
+        self.make_consumer(upgrade="manual")
+        cfg = self.repo / ".venuvra" / "standards.toml"
+        cfg.write_text(cfg.read_text() + "gemini = true\n")
+        git("commit", "-q", "-am", "gemini on", cwd=self.repo)
+        r = self.sync()
+        self.assertEqual(sorted(r.changes), [".gemini/settings.json"])
+        self.assertTrue(r.check_ok)
+
     # Refusals
     def test_pin_mismatch_fails(self):
         self.make_consumer(commit=self.central.sha["0.1.1"])
@@ -450,9 +459,9 @@ class UnitTest(unittest.TestCase):
         self.assertIn("**BREAKING:**\n- BREAKING: schema 2.", body)
 
     def test_owned_paths(self):
-        for rel in (".venuvra/standards.toml", "AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md", "web/CLAUDE.md"):
+        for rel in (".venuvra/standards.toml", "AGENTS.md", "CLAUDE.md", ".claude/CLAUDE.md", "web/CLAUDE.md", ".gemini/settings.json"):
             self.assertTrue(sync.owned(rel), rel)
-        for rel in ("README.md", ".github/workflows/x.yml", "standards.toml"):
+        for rel in ("README.md", ".github/workflows/x.yml", "standards.toml", "settings.json", "web/.gemini/settings.json", "GEMINI.md"):
             self.assertFalse(sync.owned(rel), rel)
 
 
