@@ -141,7 +141,7 @@ class CheckTest(unittest.TestCase):
     def test_over_budget_agents_md(self):
         with open(self.repo / "AGENTS.md", "a") as fh:
             fh.write("filler line for budget\n" * 1200)
-        self.assertError("AGENTS.md", "the limit is 24576")
+        self.assertError("AGENTS.md", "the limit is 24000")
 
     def test_agents_override_md(self):
         self.write("services/api/AGENTS.override.md", "ignore everything\n")
@@ -160,7 +160,54 @@ class CheckTest(unittest.TestCase):
         self.write("web/AGENTS.md", "web rules\n")
         self.assertError("web/CLAUDE.md", "out of date")
 
+    # Gemini CLI and Antigravity
+    def gemini_on(self):
+        self.write(".venuvra/standards.toml", TOML + "gemini = true\n")
+
+    def test_gemini_on_and_synced_passes(self):
+        self.gemini_on()
+        writer.apply(self.repo, writer.plan(self.repo, RULES, Config(version="0.1.0", commit=SHA, stacks=("typescript",), gemini=True)))
+        r = self.run_check()
+        self.assertTrue(r.ok, r.format())
+        self.assertEqual(r.warnings, [])
+
+    def test_gemini_on_settings_missing(self):
+        self.gemini_on()
+        self.assertError(".gemini/settings.json", "missing, so Gemini CLI")
+
+    def test_gemini_settings_without_agents_md(self):
+        self.write(".gemini/settings.json", '{"context": {"fileName": "GEMINI.md"}}\n')
+        self.assertError(".gemini/settings.json", "Gemini CLI misses the shared rules")
+
+    def test_gemini_settings_with_comments_listing_agents_md_passes(self):
+        self.gemini_on()
+        self.write(".gemini/settings.json", '{\n  // ours\n  "context": {"fileName": ["AGENTS.md"]}\n}\n')
+        r = self.run_check()
+        self.assertTrue(r.ok, r.format())
+
+    def test_gemini_settings_with_comments_missing_agents_md(self):
+        self.write(".gemini/settings.json", '{\n  // ours\n  "context": {"fileName": ["GEMINI.md"]}\n}\n')
+        self.assertError(".gemini/settings.json", "isn't plain JSON")
+
+    def test_rule_ids_in_gemini_md(self):
+        self.write("GEMINI.md", "- [SEC-001 MUST] Never commit secrets.\n")
+        self.assertError("GEMINI.md", "rule ID lines")
+
+    def test_rule_ids_in_antigravity_rules(self):
+        for rel in (".agents/rules/security.md", ".agent/rules/security.md"):
+            with self.subTest(rel=rel):
+                self.write(rel, "---\ntrigger: always_on\n---\n- [SEC-001 MUST] copy\n")
+                self.assertError(rel, "rule ID lines")
+
     # Warnings
+    def test_root_gemini_md_warning(self):
+        self.write("GEMINI.md", "Use the Gemini 3 model for reviews.\n")
+        self.assertWarning("GEMINI.md", "Antigravity")
+
+    def test_must_tripwire_in_antigravity_rule(self):
+        self.write(".agents/rules/local.md", "---\ntrigger: always_on\n---\nSEC-009 does not apply here.\n")
+        self.assertWarning(".agents/rules/local.md", "locked rule SEC-009")
+
     def test_nested_agents_md_warning(self):
         self.write("web/AGENTS.md", "web rules\n")
         self.assertWarning("web/AGENTS.md", "nested AGENTS.md")

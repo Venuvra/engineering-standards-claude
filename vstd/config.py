@@ -20,7 +20,7 @@ SCHEMA = 1
 UPGRADE_POLICIES = ("patch", "minor", "manual")
 EXPIRY_WARNING_DAYS = 30
 
-_TOP_KEYS = {"schema", "version", "commit", "upgrade", "stacks", "nested_parity", "overrides"}
+_TOP_KEYS = {"schema", "version", "commit", "upgrade", "stacks", "nested_parity", "gemini", "overrides"}
 _REQUIRED_TOP = ("schema", "version", "commit", "stacks")
 _OVERRIDE_KEYS = {"rule", "scope", "replacement", "reason", "approved_by", "approved_on", "expires"}
 _REQUIRED_OVERRIDE = ("rule", "replacement", "reason", "approved_by", "approved_on")
@@ -47,6 +47,7 @@ class Config:
     stacks: tuple[str, ...]
     upgrade: str = "minor"
     nested_parity: bool = False
+    gemini: bool = False
     overrides: tuple[Override, ...] = ()
     schema: int = SCHEMA
 
@@ -103,6 +104,10 @@ def validate(data: dict, ruleset: RuleSet, today: dt.date | None = None) -> Conf
     nested_parity = data.get("nested_parity", False)
     if not isinstance(nested_parity, bool):
         errors.append(f"'nested_parity' must be true or false, got {_type_name(nested_parity)}")
+
+    gemini = data.get("gemini", False)
+    if not isinstance(gemini, bool):
+        errors.append(f"'gemini' must be true or false, got {_type_name(gemini)}")
 
     stacks = data.get("stacks", [])
     stack_list: list[str] = []
@@ -186,7 +191,7 @@ def validate(data: dict, ruleset: RuleSet, today: dt.date | None = None) -> Conf
         return ConfigResult(None, errors, warnings)
     config = Config(
         version=version, commit=commit, stacks=tuple(stack_list), upgrade=upgrade,
-        nested_parity=nested_parity, overrides=tuple(overrides), schema=schema,
+        nested_parity=nested_parity, gemini=gemini, overrides=tuple(overrides), schema=schema,
     )
     return ConfigResult(config, errors, warnings)
 

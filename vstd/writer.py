@@ -2,11 +2,13 @@
 
 ``plan()`` is pure: it reads the repo and returns the exact new bytes for each
 file it would change. ``apply()`` writes them atomically. Only AGENTS.md and
-CLAUDE.md files are ever written, never through a symlink.
+CLAUDE.md files, and ``.gemini/settings.json`` when ``gemini = true``, are ever
+written, never through a symlink.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 from dataclasses import dataclass
@@ -14,11 +16,21 @@ from pathlib import Path
 
 from vstd.config import Config
 from vstd.markers import MarkerError, find_block
-from vstd.render import CLAUDE_IMPORT, CLAUDE_MD, render_block, render_new_agents_md
+from vstd.render import (
+    CLAUDE_IMPORT,
+    CLAUDE_MD,
+    GEMINI_CONTEXT_FILES,
+    GEMINI_SETTINGS,
+    GEMINI_SETTINGS_PATH,
+    render_block,
+    render_json,
+    render_new_agents_md,
+)
 from vstd.rules import RuleSet
 
 MAX_FILE_BYTES = 64 * 1024
 WRITABLE_NAMES = ("AGENTS.md", "CLAUDE.md")
+WRITABLE_PATHS = (GEMINI_SETTINGS_PATH,)  # exact paths, unlike WRITABLE_NAMES
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "vendor", "dist", "build", ".next", "__pycache__", ".vstd", ".terraform"}
 CLAUDE_FILES = ("CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md")
 
@@ -111,6 +123,46 @@ def plan_claude_md(repo: Path) -> Change | None:
     return None if new == root else Change("CLAUDE.md", root, new)
 
 
+def gemini_context_files(text: str) -> list[str] | None:
+    """The context file names a .gemini/settings.json gives Gemini CLI, or None if vstd can't tell.
+
+    None means the file isn't plain JSON (Gemini CLI also accepts comments) or isn't shaped the
+    way vstd expects; vstd then leaves it alone and ``vstd check`` explains what to add by hand.
+    """
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    context = data.get("context", {})
+    if not isinstance(context, dict):
+        return None
+    names = context.get("fileName", data.get("contextFileName", "GEMINI.md"))  # contextFileName: v1 settings
+    if isinstance(names, str):
+        names = [names]
+    if not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+        return None
+    return names
+
+
+def plan_gemini_settings(repo: Path) -> Change | None:
+    old = _read(repo, GEMINI_SETTINGS_PATH)
+    if old is None:
+        return Change(GEMINI_SETTINGS_PATH, None, GEMINI_SETTINGS)
+    names = gemini_context_files(old)
+    if names is None or "AGENTS.md" in names:
+        return None
+    data = json.loads(old)
+    # Keep every name the repo already uses (GEMINI.md notes still load); AGENTS.md goes first.
+    new_names = ["AGENTS.md"] + names if names else list(GEMINI_CONTEXT_FILES)
+    if "contextFileName" in data and "context" not in data:
+        data["contextFileName"] = new_names
+    else:
+        data.setdefault("context", {})["fileName"] = new_names
+    return Change(GEMINI_SETTINGS_PATH, old, render_json(data))
+
+
 def nested_agents_dirs(repo: Path) -> list[str]:
     """Directories (relative, POSIX) below the root that hold an AGENTS.md."""
     found = []
@@ -144,10 +196,12 @@ def _umask() -> int:
 def plan(repo: Path | str, ruleset: RuleSet, config: Config) -> list[Change]:
     repo = Path(repo)
     changes = [c for c in (plan_agents_md(repo, ruleset, config), plan_claude_md(repo)) if c]
+    if config.gemini:
+        changes += [c for c in (plan_gemini_settings(repo),) if c]
     if config.nested_parity:
         changes += plan_nested_parity(repo)
     for c in changes:
-        if Path(c.path).name not in WRITABLE_NAMES:
+        if Path(c.path).name not in WRITABLE_NAMES and c.path not in WRITABLE_PATHS:
             raise WriterError(f"{c.path}: not a file vstd may write")
         if len(c.new.encode("utf-8")) > MAX_FILE_BYTES:
             raise WriterError(f"{c.path}: result would exceed {MAX_FILE_BYTES} bytes")

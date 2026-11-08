@@ -75,7 +75,7 @@ def pr_body(version: str, default_branch: str, stacks: tuple[str, ...], written:
         ("- [ ] Confirm the check commands drafted in the project section at the end of `AGENTS.md`, and add the repository's own rules."
          if drafted else
          "- [ ] Fill in the project section at the end of `AGENTS.md` with this repository's build and test commands and its own rules."),
-        "- [ ] Check that any existing `AGENTS.md` or `CLAUDE.md` text was kept.",
+        "- [ ] Check that any existing `AGENTS.md`, `CLAUDE.md` or `.gemini/settings.json` content was kept.",
         ("- [x] \"Allow GitHub Actions to create and approve pull requests\" was turned on by `vstd rollout`."
          if setting else
          "- [ ] In Settings → Actions → General, allow GitHub Actions to create and approve pull requests, so the weekly sync can open its PRs."),
