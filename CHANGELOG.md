@@ -10,7 +10,16 @@ wording only. Tags `vX.Y.Z` are immutable.
 
 ## Unreleased
 
-- Rules added, changed or removed: none.
+## v0.8.0
+
+Minor release (SHOULD rules changed only).
+
+- Rules changed: DLV-002 and DLV-007 (both SHOULD). A project runs its local environment both
+  ways: Docker Compose (`-Target local`) and Docker Desktop's Kubernetes (`-Target k8s`). A local
+  destroy keeps data unless `-Purge`.
+- `templates/delivery/`: `deploy.ps1` gets the `k8s` target (kustomization in `deploy/k8s`,
+  `docker-desktop` context only, saved claims kept on destroy), and the Actions and Jenkins
+  templates offer `k8s` in their target dropdowns. See `docs/delivery.md`.
 - New `.github/workflows/rollout.yml` in this repository: runs `vstd rollout` from a release tag
   from Actions → Run workflow, with dropdowns for dry run or open PRs and for the Actions PR
   setting. It writes to other repositories with a GitHub App token (or a fine-grained PAT) kept in

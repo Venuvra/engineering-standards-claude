@@ -1,6 +1,7 @@
 // Venuvra delivery template (DLV-001..008). Copy to Jenkinsfile next to scripts/deploy.ps1;
 // every stage calls that script, so this file holds no deploy logic. Needs PowerShell 7 (pwsh)
-// on the agent, plus Docker for `local` and Terraform or OpenTofu for `cloud`.
+// on the agent, plus Docker for `local`, Docker Desktop's Kubernetes and kubectl for `k8s`,
+// and Terraform or OpenTofu for `cloud`.
 pipeline {
     agent any
 
@@ -10,7 +11,7 @@ pipeline {
     }
 
     parameters {
-        choice(name: 'TARGET', choices: ['local', 'cloud'], description: 'Where to deploy')
+        choice(name: 'TARGET', choices: ['local', 'k8s', 'cloud'], description: 'Where to deploy')
         choice(name: 'ACTION', choices: ['plan', 'deploy', 'destroy'], description: 'What to do (plan changes nothing)')
         string(name: 'CONFIRM', defaultValue: '', description: "Cloud deploy or any destroy: type exactly 'deploy <app>' or 'destroy <app>'")
     }

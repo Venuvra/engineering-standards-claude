@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - local
+          - k8s
           - cloud
         default: local
       action:
@@ -34,7 +35,8 @@ concurrency:
 
 jobs:
   plan:
-    # Venuvra's own runners when RUNNER_TARGET is set; `local` needs a runner with Docker.
+    # Venuvra's own runners when RUNNER_TARGET is set; `local` needs a runner with Docker and
+    # `k8s` one on the machine running Docker Desktop's Kubernetes (see docs/delivery.md).
     runs-on: ${{ vars.RUNNER_TARGET && format('venuvra-{0}', vars.RUNNER_TARGET) || 'ubuntu-24.04' }}
     timeout-minutes: 20
     permissions:
