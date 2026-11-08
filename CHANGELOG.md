@@ -10,6 +10,12 @@ wording only. Tags `vX.Y.Z` are immutable.
 
 ## Unreleased
 
+- Rules added, changed or removed: none.
+- Releases tag themselves: when a merged PR sets a release version on `main`, `ci`'s new `tag`
+  job creates `vX.Y.Z` on that merge commit after the tests pass and calls `release.yml` to
+  publish it. Pushing a tag by hand still works. Runs of `ci` on `main` are no longer cancelled
+  by a newer push. See `docs/releasing.md`.
+
 ## v0.8.0
 
 Minor release (SHOULD rules changed only).

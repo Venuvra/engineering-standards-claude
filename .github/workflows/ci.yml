@@ -10,7 +10,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only PR runs cancel: a run on main may be creating a tag and release.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -46,3 +47,59 @@ jobs:
         env:
           RESULT: ${{ needs.test.result }}
         run: test "$RESULT" = "success"
+
+  # When a merged PR sets a release version (no .devN) on main, tag that merge commit
+  # and publish it. Merging the release PR is the approval; nobody types a SHA.
+  # A tag made with GITHUB_TOKEN doesn't start release.yml's tag trigger, so it is
+  # called directly below. A tag that already exists is left alone.
+  tag:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write # create the tag ref only
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create the release tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I - <<'EOF'
+          import json, os, re, subprocess, sys
+
+          version = re.search(r'__version__ = "([^"]+)"', open("vstd/__init__.py", encoding="utf-8").read())[1]
+          out = open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8")
+          if not re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", version):
+              print(f"vstd {version} is not a release version; nothing to tag.")
+              sys.exit(0)
+          tag = f"v{version}"
+          if not re.search(rf"^## {re.escape(tag)}\b", open("CHANGELOG.md", encoding="utf-8").read(), re.M):
+              print(f"::error file=CHANGELOG.md::no '## {tag}' section; add it before releasing")
+              sys.exit(1)
+          repo, sha = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_SHA"]
+          api = ["gh", "api", "-H", "Accept: application/vnd.github+json"]
+          found = subprocess.run([*api, f"repos/{repo}/git/matching-refs/tags/{tag}"], capture_output=True, text=True, check=True)
+          if any(r["ref"] == f"refs/tags/{tag}" for r in json.loads(found.stdout)):
+              print(f"{tag} already exists; leaving it alone.")
+              sys.exit(0)
+          subprocess.run([*api, "-X", "POST", f"repos/{repo}/git/refs", "-f", f"ref=refs/tags/{tag}", "-f", f"sha={sha}"],
+                         check=True, stdout=subprocess.DEVNULL)
+          print(f"Tagged {tag} on {sha}")
+          out.write(f"tag={tag}\n")
+          EOF
+
+  publish:
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    permissions:
+      contents: write # create the GitHub release object
+      checks: read # release.yml confirms ci passed on the tagged commit
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
