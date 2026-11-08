@@ -61,9 +61,89 @@ What it automates beyond the clone and PR:
 
 The merge (step 8) stays with a person: standards changes reach a default branch only through a
 reviewed PR, and rollout never merges or pushes to the default branch. The PR body lists what is
-left to confirm. The token is the person's own because
-the PR adds a workflow file, which a workflow's `GITHUB_TOKEN` can't push; a central Action
-would need an organisation-wide token with workflow scope.
+left to confirm. Run locally, the token is your own because the PR adds a workflow file, which a
+workflow's `GITHUB_TOKEN` can't push. The Action below uses a GitHub App or a fine-grained PAT
+instead.
+
+## From GitHub Actions: the `rollout` workflow
+
+`.github/workflows/rollout.yml` in this repository runs the same `vstd rollout` from a release tag,
+so nobody needs a local checkout. Start it from Actions → rollout → Run workflow:
+
+| Input | Values | Meaning |
+| --- | --- | --- |
+| Release tag | `vX.Y.Z` | The release to check out and pin in every repository |
+| Repositories | `a, b` or `<org>/a, <org>/b` | Repositories in this organisation only |
+| What the rollout should do | `dry-run` (default), `open-prs` | `dry-run` runs init and check and pushes nothing |
+| Actions PR setting | `no` (default), `yes` | `yes` adds `--allow-actions-prs` to an `open-prs` run |
+
+The result is printed in the log and on the run's summary page, with the PR list. It runs on
+GitHub-hosted runners: this repository is public, so the private-repository billing limit doesn't
+stop it, and the self-hosted runners stay off a public repository. It never merges, and the PRs
+still need a person's review.
+
+**Skip list.** Repositories that must never get these PRs, for example ones that already carry a
+different standards system, go in the variable `ROLLOUT_SKIP` (comma-separated) on the `rollout`
+environment. The workflow reports them as skipped even when they are listed in a run. Keep the list
+in the variable, not in a file, because this repository is public.
+
+### Set up once: the token
+
+A workflow's own `GITHUB_TOKEN` only reaches this repository, so the workflow needs a token that can
+write to the others. Both options live in a GitHub environment named `rollout`, so only this
+workflow can read them, and you can make every run wait for your approval.
+
+**1. Create the environment.** Settings → Environments → New environment → `rollout`. Under
+"Deployment protection rules" tick "Required reviewers" and add yourself, so a run starts only
+after you approve it. Under "Deployment branches and tags" pick "Selected branches and tags" and add
+`main`.
+
+**2a. GitHub App (recommended).** Its tokens last an hour, cover only the repositories in the run,
+and are revoked when the job ends; nothing is tied to a person's account.
+
+1. Organisation Settings → Developer settings → GitHub Apps → New GitHub App.
+   - Name: for example `<org>-standards-rollout`. Homepage URL: this repository's URL.
+   - Webhook: untick "Active".
+   - Repository permissions: Contents read and write, Pull requests read and write,
+     Workflows read and write, Checks read-only (Metadata read-only is added for you). Add
+     Administration read and write only if you will use the Actions PR setting `yes`.
+   - "Where can this GitHub App be installed?": Only on this account.
+2. Create it, note the **Client ID** at the top of the page, then "Generate a private key". A
+   `.pem` file downloads.
+3. Install App → the organisation → "All repositories", or "Only select repositories" listing the
+   ones to roll out to. A run fails for a repository the App isn't installed on.
+4. Store the client ID and key in the `rollout` environment. In PowerShell, from this repository's
+   checkout:
+
+   ```powershell
+   gh variable set ROLLOUT_APP_CLIENT_ID --env rollout --body "<client id>"
+   Get-Content -Raw "$HOME\Downloads\<file>.pem" | gh secret set ROLLOUT_APP_PRIVATE_KEY --env rollout
+   Remove-Item "$HOME\Downloads\<file>.pem"
+   ```
+
+   In a POSIX shell: `gh secret set ROLLOUT_APP_PRIVATE_KEY --env rollout < <file>.pem`.
+
+The onboarding commits and PRs show the App as author (`<app-name>[bot]`).
+
+**2b. Fine-grained PAT (alternative).** Simpler to make, but it acts as you and has to be renewed
+when it expires.
+
+1. Your Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new
+   token.
+   - Resource owner: the organisation (the organisation may need to approve the token).
+   - Expiration: as short as suits you, for example 30 days.
+   - Repository access: only the repositories to roll out to.
+   - Repository permissions: the same as the App above.
+2. Store it:
+
+   ```powershell
+   gh secret set ROLLOUT_PAT --env rollout
+   ```
+
+   `gh` asks for the value; paste the token.
+
+When `ROLLOUT_APP_CLIENT_ID` is set the workflow uses the App and ignores `ROLLOUT_PAT`. With
+neither, the run stops with a message naming these settings.
 
 ## Per repository
 

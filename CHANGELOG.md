@@ -10,6 +10,13 @@ wording only. Tags `vX.Y.Z` are immutable.
 
 ## Unreleased
 
+- Rules added, changed or removed: none.
+- New `.github/workflows/rollout.yml` in this repository: runs `vstd rollout` from a release tag
+  from Actions → Run workflow, with dropdowns for dry run or open PRs and for the Actions PR
+  setting. It writes to other repositories with a GitHub App token (or a fine-grained PAT) kept in
+  a `rollout` environment, honours a `ROLLOUT_SKIP` list, and never merges. Nothing changes in
+  onboarded repositories. Setup: `docs/rollout.md`, "From GitHub Actions".
+
 ## v0.7.1
 
 Patch release. No rule changes. Use this instead of v0.7.0.
