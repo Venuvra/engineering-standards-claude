@@ -83,6 +83,30 @@ class ScriptTest(unittest.TestCase):
     def test_local_destroy_keeps_volumes_unless_purge(self):
         self.assertIn("if ($Purge) { $down += '--volumes' }", switch_branch("local/destroy"))
 
+    def test_k8s_destroy_keeps_volumes_unless_purge(self):
+        destroy = switch_branch("k8s/destroy")
+        self.assertLess(destroy.index('Assert-Confirmed "destroy $App"'), destroy.index("Invoke-Kubectl"))
+        purge, keep = destroy.split("} else {")
+        self.assertIn("'delete', 'namespace', $App", purge)
+        self.assertNotIn("namespace", keep)
+        self.assertNotIn("pvc", keep.lower(), "claims hold the data")
+
+    def test_k8s_only_on_docker_desktop(self):
+        self.assertIn("[ValidateSet('docker-desktop')][string]$KubeContext", SCRIPT)
+        self.assertNotRegex(SCRIPT, r"& kubectl (?!--context \$KubeContext )(?!@)", "every kubectl call names the context")
+        self.assertIn("@('--context', $KubeContext)", SCRIPT)
+
+    def test_k8s_plan_works_before_the_namespace_exists(self):
+        plan = switch_branch("k8s/plan")
+        self.assertIn("get namespace $App --ignore-not-found", plan)
+        self.assertLess(plan.index("'kustomize', $K8sDir"), plan.index("diff -k $K8sDir"))
+
+    def test_every_target_is_offered(self):
+        targets = re.search(r"\[ValidateSet\(([^)]*)\)\]\[string\]\$Target", SCRIPT).group(1)
+        self.assertEqual(targets, "'local', 'k8s', 'cloud'")
+        self.assertIn("choices: ['local', 'k8s', 'cloud']", JENKINSFILE)
+        self.assertIn("          - local\n          - k8s\n          - cloud\n", WORKFLOW)
+
     def test_tools_get_argument_arrays(self):
         self.assertNotIn("Invoke-Expression", SCRIPT)
         self.assertNotRegex(SCRIPT, r"\biex\b")

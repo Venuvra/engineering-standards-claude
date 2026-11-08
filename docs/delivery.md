@@ -18,15 +18,24 @@ Copy them from `templates/delivery/` in the release you pin:
 
 | Template | Copy to | What it does |
 | --- | --- | --- |
-| `deploy.ps1` | `scripts/deploy.ps1` | The one entry point: `-Target local\|cloud -Action plan\|deploy\|destroy` |
+| `deploy.ps1` | `scripts/deploy.ps1` | The one entry point: `-Target local\|k8s\|cloud -Action plan\|deploy\|destroy` |
 | `deploy.yml` | `.github/workflows/deploy.yml` | Manual run with dropdowns; plan job, then the run job |
 | `Jenkinsfile` | `Jenkinsfile` | The same stages: Plan, Approve, Run |
 
 Both pipelines call `scripts/deploy.ps1` and nothing else, so a run from your own machine, from
 Actions and from Jenkins does the same thing.
 
-- **Local** uses Docker Compose (`compose.yaml`). `destroy` needs `-Confirm 'destroy <app>'` and
-  keeps volumes unless `-Purge` is given.
+- **Local** runs two ways, and a project offers both (DLV-007):
+  - `-Target local` uses Docker Compose (`compose.yaml`). `destroy` keeps volumes unless `-Purge`.
+  - `-Target k8s` uses Docker Desktop's Kubernetes: the kustomization in `deploy/k8s` (set the
+    namespace to `<app>` there), on the `docker-desktop` context only, so it can never reach a
+    real cluster. `plan` shows `kubectl diff`, or the rendered manifests before the first deploy.
+    `deploy` builds `<app>:local` (Docker Desktop's cluster runs images from Docker's own store,
+    so reference it with `imagePullPolicy: Never` or `IfNotPresent`), applies, and restarts each
+    deployment. `destroy` removes the workloads and keeps persistent volume claims and secrets;
+    `-Purge` deletes the whole namespace.
+  - Both destroys need `-Confirm 'destroy <app>'`.
+  - Use one image and the same settings for both, so Compose and Kubernetes run the same app.
 - **Cloud** uses Terraform (or OpenTofu with `-Iac tofu`) in `infra/`, with remote, locked
   state. `plan -For deploy` or `plan -For destroy` saves the plan (`infra/tfplan` or
   `infra/tfplan-destroy`) and prints it. `deploy` and `destroy` apply only that saved plan, so
@@ -38,6 +47,9 @@ From PowerShell on your own machine:
 ```powershell
 ./scripts/deploy.ps1 -Target local -Action deploy
 ./scripts/deploy.ps1 -Target local -Action destroy -Confirm 'destroy myapp'
+./scripts/deploy.ps1 -Target k8s -Action plan
+./scripts/deploy.ps1 -Target k8s -Action deploy
+./scripts/deploy.ps1 -Target k8s -Action destroy -Confirm 'destroy myapp'
 ./scripts/deploy.ps1 -Target cloud -Action plan
 ./scripts/deploy.ps1 -Target cloud -Action deploy -Confirm 'deploy myapp'
 ./scripts/deploy.ps1 -Target cloud -Action plan -For destroy
@@ -55,7 +67,9 @@ anything that touches the cloud or destroys.
   GitHub Free, private repositories have no environment reviewers, so the typed confirmation is
   the gate.
 - The jobs run on your own runners when the repository variable `RUNNER_TARGET` is set (see
-  [no-actions.md](no-actions.md)). `local` needs a runner with Docker.
+  [no-actions.md](no-actions.md)). `local` needs a runner with Docker. `k8s` needs a runner
+  installed on the machine running Docker Desktop's Kubernetes, with kubectl and the
+  `docker-desktop` context; the shared ARC runners can't reach it.
 - Cloud login uses OIDC (`id-token: write`); add your provider's login step before the script, or
   use the organisation's shared reusable deploy workflows for cloud jobs where they exist
   (DLV-006). Don't store cloud keys as secrets.
@@ -66,7 +80,8 @@ anything that touches the cloud or destroys.
 
 Create a Pipeline job from SCM pointing at the repository's `Jenkinsfile`, then use Build with
 Parameters. The agent needs PowerShell 7 (`pwsh`), plus Docker for `local` and Terraform or
-OpenTofu for `cloud`. Cloud credentials come from a credentials binding or the agent's own
+OpenTofu for `cloud`. For `k8s` the agent must run on the machine with Docker Desktop's
+Kubernetes. Cloud credentials come from a credentials binding or the agent's own
 short-lived identity, never from the repository. The Approve stage stops for a person before any
 cloud deploy or any destroy, after the plan is in the console log.
 

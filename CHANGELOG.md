@@ -10,7 +10,16 @@ wording only. Tags `vX.Y.Z` are immutable.
 
 ## Unreleased
 
-- Rules added, changed or removed: none.
+## v0.8.0
+
+Minor release (SHOULD rules changed only).
+
+- Rules changed: DLV-002 and DLV-007 (both SHOULD). A project runs its local environment both
+  ways: Docker Compose (`-Target local`) and Docker Desktop's Kubernetes (`-Target k8s`). A local
+  destroy keeps data unless `-Purge`.
+- `templates/delivery/`: `deploy.ps1` gets the `k8s` target (kustomization in `deploy/k8s`,
+  `docker-desktop` context only, saved claims kept on destroy), and the Actions and Jenkins
+  templates offer `k8s` in their target dropdowns. See `docs/delivery.md`.
 - Gemini CLI and Google Antigravity (`agy`) read the same `AGENTS.md` block as Codex and Claude
   Code. No rule text is copied: Antigravity reads `AGENTS.md` itself, and Gemini CLI reads it
   once `.gemini/settings.json` lists it under `context.fileName`. See `docs/agents.md`.
