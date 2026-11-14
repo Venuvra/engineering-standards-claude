@@ -8,9 +8,16 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
-## Unreleased
+## v0.9.0
 
-- Rules added, changed or removed: none.
+Minor release (SHOULD rules added only).
+
+- Rules added: DOC-005 and DOC-006 (both SHOULD). Planning files are shared by every
+  assistant: the stack and design live in `docs/architecture.md` (linked from the `AGENTS.md`
+  project section), and each non-trivial task's plan in `docs/plans/YYYY-MM-DD-<task>.md`.
+  No per-assistant plan files. See `docs/planning.md`.
+- New starter files `templates/docs/architecture.md` and `templates/docs/plan.md`. Sync doesn't
+  write them; copy them into the repository.
 - Releases tag themselves: when a merged PR sets a release version on `main`, `ci`'s new `tag`
   job creates `vX.Y.Z` on that merge commit after the tests pass and calls `release.yml` to
   publish it. Pushing a tag by hand still works. Runs of `ci` on `main` are no longer cancelled
