@@ -68,14 +68,26 @@ instead.
 ## From GitHub Actions: the `rollout` workflow
 
 `.github/workflows/rollout.yml` in this repository runs the same `vstd rollout` from a release tag,
-so nobody needs a local checkout. Start it from Actions → rollout → Run workflow:
+so nobody needs a local checkout. Start it from Actions → rollout → Run workflow. Every input is a
+dropdown, so a version or name can't be mistyped:
 
 | Input | Values | Meaning |
 | --- | --- | --- |
-| Release tag | `vX.Y.Z` | The release to check out and pin in every repository |
-| Repositories | `a, b` or `<org>/a, <org>/b` | Repositories in this organisation only |
+| Use workflow from | `main` | GitHub's own branch picker; the `rollout` environment only allows `main` |
+| Release | `latest` (default), or one of the recent `vX.Y.Z` | The release to check out and pin in every repository. The run also checks it is a published release before anything else |
 | What the rollout should do | `dry-run` (default), `open-prs` | `dry-run` runs init and check and pushes nothing |
 | Actions PR setting | `no` (default), `yes` | `yes` adds `--allow-actions-prs` to an `open-prs` run |
+
+**Which repositories.** The run takes them from the variable `ROLLOUT_REPOS` (comma-separated
+names) on the `rollout` environment, not from a typed input. A variable keeps private repository
+names out of this public repository, and you set it once instead of typing it on each run.
+Repositories that are already onboarded, or already have an onboarding PR open, are reported as
+skipped, so the list can stay as it is between runs. To roll out to fewer repositories, shorten the
+variable first:
+
+```powershell
+gh variable set ROLLOUT_REPOS --env rollout --body "repo-a,repo-b"
+```
 
 The result is printed in the log and on the run's summary page, with the PR list. It runs on
 GitHub-hosted runners: this repository is public, so the private-repository billing limit doesn't
