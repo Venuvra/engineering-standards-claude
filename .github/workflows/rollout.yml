@@ -1,6 +1,8 @@
 name: rollout
 
-# Runs `vstd rollout` from a release tag: one onboarding PR per listed repository.
+# Runs `vstd rollout` from a release tag: one onboarding PR per repository listed in the
+# ROLLOUT_REPOS variable of the `rollout` environment (a variable, so this public file names
+# no private repositories). Repositories already onboarded are skipped.
 # Started by hand only. It never merges, never pushes to a default branch, and changes
 # a repository setting only when "Actions PR setting" is set to yes. It writes to other
 # repositories with a GitHub App token (preferred) or a fine-grained PAT, kept in the
@@ -8,14 +10,16 @@ name: rollout
 on:
   workflow_dispatch:
     inputs:
+      # Every input is a dropdown, so nothing can be mistyped. The release list is kept current
+      # by hand in each release PR; tests/unit/test_rollout_workflow.py fails until it is.
       release:
-        description: Release tag to roll out (vX.Y.Z)
-        type: string
-        required: true
-      repos:
-        description: Repositories, comma-separated (owner/name or just name)
-        type: string
-        required: true
+        description: Release to roll out
+        type: choice
+        options:
+          - latest
+          - v0.8.0
+          - v0.7.1
+        default: latest
       mode:
         description: What the rollout should do
         type: choice
@@ -51,7 +55,7 @@ jobs:
         id: plan
         env:
           RELEASE: ${{ inputs.release }}
-          REPOS: ${{ inputs.repos }}
+          REPOS: ${{ vars.ROLLOUT_REPOS }}
           SKIP: ${{ vars.ROLLOUT_SKIP }}
           OWNER: ${{ github.repository_owner }}
         run: |
@@ -62,8 +66,9 @@ jobs:
               print(f"::error::{msg}")
               sys.exit(1)
 
-          if not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", os.environ["RELEASE"]):
-              fail(f"release must be vMAJOR.MINOR.PATCH, got {os.environ['RELEASE']!r}")
+          release = os.environ["RELEASE"].strip()
+          if release != "latest" and not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", release):
+              fail(f"release must be latest or vMAJOR.MINOR.PATCH, got {release!r}")
           owner = os.environ["OWNER"]
 
           def slugs(text):
@@ -83,8 +88,11 @@ jobs:
               return out
 
           skip = {s.lower() for s in slugs(os.environ.get("SKIP", ""))}
+          listed = slugs(os.environ.get("REPOS", ""))
+          if not listed:
+              fail("the ROLLOUT_REPOS variable on the rollout environment is empty; list the repositories there, comma-separated")
           repos = []
-          for repo in slugs(os.environ["REPOS"]):
+          for repo in listed:
               if repo.lower() in skip:
                   print(f"SKIPPED  {repo}: listed in the ROLLOUT_SKIP variable")
               else:
@@ -97,9 +105,32 @@ jobs:
           print("Rolling out to: " + ", ".join(repos))
           EOF
 
+      # Turns "latest" into a tag, and stops early with the published releases listed when the
+      # tag doesn't exist (a typo such as v0.0.8 for v0.8.0 used to fail inside checkout).
+      - name: Find the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          RELEASE=$(printf '%s' "$RELEASE" | tr -d '[:space:]')
+          if [ "$RELEASE" = "latest" ] || [ -z "$RELEASE" ]; then
+            tag=$(gh api "repos/$REPO/releases/latest" --jq .tag_name)
+          elif gh api "repos/$REPO/releases/tags/$RELEASE" --silent 2> /dev/null; then
+            tag=$RELEASE
+          else
+            recent=$(gh api "repos/$REPO/releases?per_page=5" --jq '[.[] | select(.draft | not) | .tag_name] | join(", ")')
+            echo "::error::$RELEASE is not a published release of $REPO. Recent releases: $recent. Leave the field as latest to use the newest one."
+            exit 1
+          fi
+          echo "Rolling out release $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/${{ inputs.release }}
+          ref: refs/tags/${{ steps.release.outputs.tag }}
           persist-credentials: false
 
       # Preferred: a GitHub App installed on the organisation. The token lasts an hour, covers

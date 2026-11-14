@@ -20,6 +20,8 @@ Rule IDs are never reused. A removed rule's ID goes into `rules/retired.toml`.
    any breaking line with `BREAKING:`. Set `version = "X.Y.Z"` in this repo's
    `.venuvra/standards.toml` (its `commit` stays zeroed). Then re-render this repo's `AGENTS.md`
    (`python3 -I vstd/main.py sync --local --repo .`) and update the golden files if the output changed.
+   Add `vX.Y.Z` to the `release` dropdown in `.github/workflows/rollout.yml`, right after
+   `latest`; the tests fail until you do.
 2. Merge after `ci` is green. Merging is the release approval.
 3. On the push to `main`, `ci` runs its tests, then its `tag` job sees a release version (no
    `.devN`) and creates the tag `vX.Y.Z` on that merge commit. It refuses when `CHANGELOG.md`

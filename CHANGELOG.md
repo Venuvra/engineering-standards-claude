@@ -22,6 +22,11 @@ Minor release (SHOULD rules added only).
   job creates `vX.Y.Z` on that merge commit after the tests pass and calls `release.yml` to
   publish it. Pushing a tag by hand still works. Runs of `ci` on `main` are no longer cancelled
   by a newer push. See `docs/releasing.md`.
+- `rollout` workflow: every input is a dropdown. Release offers `latest` (default) and the recent
+  tags, and is checked against the published releases before checkout (a typed `v0.0.8` for
+  `v0.8.0` used to fail inside checkout with "couldn't find remote ref"). The repositories input is
+  gone: the list comes from the `ROLLOUT_REPOS` variable on the `rollout` environment, and
+  repositories already onboarded are skipped. See `docs/rollout.md`.
 
 ## v0.8.0
 
