@@ -92,9 +92,18 @@ def git(args: list[str], cwd: Path | None = None, env: dict[str, str] | None = N
     except subprocess.TimeoutExpired:
         raise SyncError(f"git {args[0]} timed out") from None
     if proc.returncode != 0:
-        detail = proc.stderr.decode("utf-8", "replace").strip().splitlines()
-        raise SyncError(f"git {args[0]} failed: {detail[-1] if detail else 'exit ' + str(proc.returncode)}")
+        raise SyncError(f"git {args[0]} failed: {_git_failure(proc.stderr.decode('utf-8', 'replace')) or 'exit ' + str(proc.returncode)}")
     return proc.stdout.decode("utf-8", "replace").strip()
+
+
+def _git_failure(stderr: str) -> str:
+    """The reason in git's stderr. A refused push ends with the generic "failed to push some refs";
+    the server's own words are on the "remote:" and "! [remote rejected]" lines before it."""
+    lines = [line.strip() for line in stderr.strip().splitlines() if line.strip()]
+    why = [line for line in lines if line.startswith("! [")]
+    why += [rest for line in lines if line.startswith("remote:") and (rest := line[len("remote:"):].strip())]
+    detail = "; ".join(dict.fromkeys(why)) or (lines[-1] if lines else "")
+    return detail if len(detail) <= 500 else detail[:497] + "..."
 
 
 def list_releases(url: str) -> dict[Version, str]:

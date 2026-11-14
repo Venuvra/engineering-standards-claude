@@ -126,7 +126,13 @@ def onboard(
         pr = client.find_open_pr(BRANCH, base)
         if pr is not None:
             setting()
-            state = client.check_state(pr.head_sha) if pr.head_sha else "no checks"
+            try:
+                state = client.check_state(pr.head_sha) if pr.head_sha else "no checks"
+            except github.GitHubError:
+                # Fine-grained PATs can't be given the Checks permission, so GitHub may refuse
+                # this read. The PR is still there; only its check summary is missing.
+                state = "unknown"
+                notes = [*notes, "couldn't read the PR's checks (a fine-grained PAT has no Checks permission); see the PR page"]
             return RepoResult(repo, "skipped", "onboarding PR already open", pr.url, warnings=notes, checks=state)
 
         url = clone_url or f"https://github.com/{repo}.git"
