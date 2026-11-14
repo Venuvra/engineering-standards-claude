@@ -72,7 +72,7 @@ so nobody needs a local checkout. Start it from Actions → rollout → Run work
 
 | Input | Values | Meaning |
 | --- | --- | --- |
-| Release tag | `vX.Y.Z` | The release to check out and pin in every repository |
+| Release | `latest` (default) or `vX.Y.Z` | The release to check out and pin in every repository. A tag that isn't a published release stops the run before anything else, listing the recent releases |
 | Repositories | `a, b` or `<org>/a, <org>/b` | Repositories in this organisation only |
 | What the rollout should do | `dry-run` (default), `open-prs` | `dry-run` runs init and check and pushes nothing |
 | Actions PR setting | `no` (default), `yes` | `yes` adds `--allow-actions-prs` to an `open-prs` run |

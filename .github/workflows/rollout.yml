@@ -9,9 +9,10 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: Release tag to roll out (vX.Y.Z)
+        description: Release to roll out (latest, or a tag like v0.8.0)
         type: string
-        required: true
+        required: false
+        default: latest
       repos:
         description: Repositories, comma-separated (owner/name or just name)
         type: string
@@ -62,8 +63,9 @@ jobs:
               print(f"::error::{msg}")
               sys.exit(1)
 
-          if not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", os.environ["RELEASE"]):
-              fail(f"release must be vMAJOR.MINOR.PATCH, got {os.environ['RELEASE']!r}")
+          release = os.environ["RELEASE"].strip()
+          if release != "latest" and not re.fullmatch(r"v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", release):
+              fail(f"release must be latest or vMAJOR.MINOR.PATCH, got {release!r}")
           owner = os.environ["OWNER"]
 
           def slugs(text):
@@ -97,9 +99,32 @@ jobs:
           print("Rolling out to: " + ", ".join(repos))
           EOF
 
+      # Turns "latest" into a tag, and stops early with the published releases listed when the
+      # tag doesn't exist (a typo such as v0.0.8 for v0.8.0 used to fail inside checkout).
+      - name: Find the release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ inputs.release }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          RELEASE=$(printf '%s' "$RELEASE" | tr -d '[:space:]')
+          if [ "$RELEASE" = "latest" ] || [ -z "$RELEASE" ]; then
+            tag=$(gh api "repos/$REPO/releases/latest" --jq .tag_name)
+          elif gh api "repos/$REPO/releases/tags/$RELEASE" --silent 2> /dev/null; then
+            tag=$RELEASE
+          else
+            recent=$(gh api "repos/$REPO/releases?per_page=5" --jq '[.[] | select(.draft | not) | .tag_name] | join(", ")')
+            echo "::error::$RELEASE is not a published release of $REPO. Recent releases: $recent. Leave the field as latest to use the newest one."
+            exit 1
+          fi
+          echo "Rolling out release $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: refs/tags/${{ inputs.release }}
+          ref: refs/tags/${{ steps.release.outputs.tag }}
           persist-credentials: false
 
       # Preferred: a GitHub App installed on the organisation. The token lasts an hour, covers

@@ -51,8 +51,17 @@ class RolloutWorkflowTest(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read\n", WORKFLOW)
         self.assertIn("    environment: rollout\n", WORKFLOW)
 
-    def test_runs_the_release_tag(self):
-        self.assertIn("ref: refs/tags/${{ inputs.release }}", WORKFLOW)
+    def test_runs_the_checked_release_tag(self):
+        # The tag is checked against the published releases before checkout, never used raw.
+        self.assertIn("ref: refs/tags/${{ steps.release.outputs.tag }}", WORKFLOW)
+        self.assertNotIn("refs/tags/${{ inputs.release }}", WORKFLOW)
+        self.assertRegex(WORKFLOW, r"\n      release:\n(?:        .*\n)*?        default: latest\n")
+        self.assertLess(WORKFLOW.index("name: Find the release"), WORKFLOW.index("uses: actions/checkout@"))
+
+    def test_plan_accepts_latest(self):
+        code, out, outputs = plan("one", release="latest")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(outputs["repos"], "Acme/one")
 
     def test_plan_accepts_names_and_drops_duplicates(self):
         code, out, outputs = plan("Acme/one, two\nacme/ONE  three")
@@ -69,6 +78,7 @@ class RolloutWorkflowTest(unittest.TestCase):
         for repos, release, fragment in [
             ("one", "0.7.1", "vMAJOR.MINOR.PATCH"),
             ("one", "v0.7", "vMAJOR.MINOR.PATCH"),
+            ("one", "newest", "vMAJOR.MINOR.PATCH"),
             ("Other/one", "v0.7.1", "outside Acme"),
             ("one;rm", "v0.7.1", "not a repository name"),
             ("", "v0.7.1", "no repositories left"),
