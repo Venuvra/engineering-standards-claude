@@ -1,6 +1,8 @@
 name: rollout
 
-# Runs `vstd rollout` from a release tag: one onboarding PR per listed repository.
+# Runs `vstd rollout` from a release tag: one onboarding PR per repository listed in the
+# ROLLOUT_REPOS variable of the `rollout` environment (a variable, so this public file names
+# no private repositories). Repositories already onboarded are skipped.
 # Started by hand only. It never merges, never pushes to a default branch, and changes
 # a repository setting only when "Actions PR setting" is set to yes. It writes to other
 # repositories with a GitHub App token (preferred) or a fine-grained PAT, kept in the
@@ -8,15 +10,16 @@ name: rollout
 on:
   workflow_dispatch:
     inputs:
+      # Every input is a dropdown, so nothing can be mistyped. The release list is kept current
+      # by hand in each release PR; tests/unit/test_rollout_workflow.py fails until it is.
       release:
-        description: Release to roll out (latest, or a tag like v0.8.0)
-        type: string
-        required: false
+        description: Release to roll out
+        type: choice
+        options:
+          - latest
+          - v0.8.0
+          - v0.7.1
         default: latest
-      repos:
-        description: Repositories, comma-separated (owner/name or just name)
-        type: string
-        required: true
       mode:
         description: What the rollout should do
         type: choice
@@ -52,7 +55,7 @@ jobs:
         id: plan
         env:
           RELEASE: ${{ inputs.release }}
-          REPOS: ${{ inputs.repos }}
+          REPOS: ${{ vars.ROLLOUT_REPOS }}
           SKIP: ${{ vars.ROLLOUT_SKIP }}
           OWNER: ${{ github.repository_owner }}
         run: |
@@ -85,8 +88,11 @@ jobs:
               return out
 
           skip = {s.lower() for s in slugs(os.environ.get("SKIP", ""))}
+          listed = slugs(os.environ.get("REPOS", ""))
+          if not listed:
+              fail("the ROLLOUT_REPOS variable on the rollout environment is empty; list the repositories there, comma-separated")
           repos = []
-          for repo in slugs(os.environ["REPOS"]):
+          for repo in listed:
               if repo.lower() in skip:
                   print(f"SKIPPED  {repo}: listed in the ROLLOUT_SKIP variable")
               else:
