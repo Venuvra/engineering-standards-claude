@@ -8,6 +8,17 @@ Versioning: MAJOR when a MUST rule is added or tightened, a rule is removed, or 
 config schema breaks; MINOR for new SHOULD rules or a new stack profile; PATCH for
 wording only. Tags `vX.Y.Z` are immutable.
 
+## v0.9.1
+
+Patch release (tooling fixes only; no rule changes).
+
+- Rules added, changed or removed: none.
+- `vstd rollout` and `vstd sync`: a refused `git push` now reports GitHub's reason (the
+  `remote:` and `! [remote rejected]` lines), not just "failed to push some refs".
+- `vstd rollout`: when GitHub refuses to show an open onboarding PR's checks (a fine-grained PAT
+  can't have the Checks permission), the repository is still skipped, with checks `unknown` and a
+  warning, instead of failing. `docs/rollout.md` no longer asks for Checks on a PAT.
+
 ## v0.9.0
 
 Minor release (SHOULD rules added only).
@@ -27,11 +38,6 @@ Minor release (SHOULD rules added only).
   `v0.8.0` used to fail inside checkout with "couldn't find remote ref"). The repositories input is
   gone: the list comes from the `ROLLOUT_REPOS` variable on the `rollout` environment, and
   repositories already onboarded are skipped. See `docs/rollout.md`.
-- `vstd rollout` and `vstd sync`: a refused `git push` now reports GitHub's reason (the
-  `remote:` and `! [remote rejected]` lines), not just "failed to push some refs".
-- `vstd rollout`: when GitHub refuses to show an open onboarding PR's checks (a fine-grained PAT
-  can't have the Checks permission), the repository is still skipped, with checks `unknown` and a
-  warning, instead of failing. `docs/rollout.md` no longer asks for Checks on a PAT.
 
 ## v0.8.0
 
