@@ -35,6 +35,7 @@ class StubGitHub:
         self.pulls = []
         self.refuse_create = 0  # answer this many POST /pulls with a 422
         self.check_runs = []  # what GET commits/{sha}/check-runs returns
+        self.refuse_checks = False  # answer GET check-runs with a 403, as for a token without Checks
         stub = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -73,6 +74,8 @@ class StubGitHub:
                         perms.update(body)
                         return self._reply(204, {})
                     return self._reply(200, perms)
+                if self.command == "GET" and parts[4] == "commits" and parts[6] == "check-runs" and stub.refuse_checks:
+                    return self._reply(403, {"message": "Resource not accessible by personal access token"})
                 if self.command == "GET" and parts[4] == "commits" and parts[6] == "check-runs":
                     return self._reply(200, {"check_runs": stub.check_runs})
                 if self.command == "GET" and parts[4] == "pulls":
@@ -254,6 +257,15 @@ class RolloutTest(unittest.TestCase):
         self.api.check_runs = [{"status": "completed", "conclusion": "failure"}]
         [r] = self.run_rollout(["acme/state"])
         self.assertEqual(r.checks, "failing")
+
+    def test_unreadable_checks_still_skip_the_open_pr(self):
+        self.make_repo("acme/pat")
+        self.api.pulls.append({"number": 3, "html_url": "https://example.test/acme/pat/pull/3", "state": "open",
+                               "repo": "acme/pat", "title": "t", "body": "b", "head": {"sha": "d" * 40}, "base": "main"})
+        self.api.refuse_checks = True
+        [r] = self.run_rollout(["acme/pat"])
+        self.assertEqual((r.outcome, r.checks, r.pr_url), ("skipped", "unknown", "https://example.test/acme/pat/pull/3"))
+        self.assertTrue(any("Checks permission" in w for w in r.warnings))
 
     def test_skips_already_onboarded_repo(self):
         self.make_repo("acme/done", files={"README.md": "x\n"})

@@ -22,6 +22,9 @@ wording only. Tags `vX.Y.Z` are immutable.
   repositories already onboarded are skipped. See `docs/rollout.md`.
 - `vstd rollout` and `vstd sync`: a refused `git push` now reports GitHub's reason (the
   `remote:` and `! [remote rejected]` lines), not just "failed to push some refs".
+- `vstd rollout`: when GitHub refuses to show an open onboarding PR's checks (a fine-grained PAT
+  can't have the Checks permission), the repository is still skipped, with checks `unknown` and a
+  warning, instead of failing. `docs/rollout.md` no longer asks for Checks on a PAT.
 
 ## v0.8.0
 

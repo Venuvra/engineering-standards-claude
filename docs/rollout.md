@@ -145,7 +145,8 @@ when it expires.
    - Resource owner: the organisation (the organisation may need to approve the token).
    - Expiration: as short as suits you, for example 30 days.
    - Repository access: only the repositories to roll out to.
-   - Repository permissions: the same as the App above.
+   - Repository permissions: the same as the App above, except Checks, which fine-grained tokens
+     don't offer. Without it a rerun reports an open PR's checks as `unknown`; the PR page shows them.
 2. Store it:
 
    ```powershell
