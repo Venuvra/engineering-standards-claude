@@ -289,6 +289,21 @@ class RolloutTest(unittest.TestCase):
         self.assertIn("404", results[2].detail)
         self.assertNotIn(TOKEN, " ".join(r.detail for r in results))
 
+    def test_refused_push_reports_the_servers_reason(self):
+        # GitHub refuses a token without the Workflows permission from a pre-receive hook; git's
+        # last stderr line is then only "failed to push some refs", which hid the reason.
+        origin = self.make_repo("acme/locked")
+        hook = origin / "hooks" / "pre-receive"
+        hook.write_text("#!/bin/sh\necho 'refusing to allow a Personal Access Token to create or update workflow "
+                        "`.github/workflows/standards.yml` without `workflows` permission' >&2\nexit 1\n")
+        hook.chmod(0o755)
+        [r] = self.run_rollout(["acme/locked"])
+        self.assertEqual(r.outcome, "failed")
+        self.assertIn("git push failed", r.detail)
+        self.assertIn("without `workflows` permission", r.detail)
+        self.assertIn("[remote rejected]", r.detail)
+        self.assertEqual(self.branches("acme/locked"), ["main"])
+
     def test_keeps_existing_agents_text(self):
         self.make_repo("acme/docs", files={"AGENTS.md": "Run make test before pushing.\n"})
         [r] = self.run_rollout(["acme/docs"])

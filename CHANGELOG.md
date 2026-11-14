@@ -20,6 +20,8 @@ wording only. Tags `vX.Y.Z` are immutable.
   `v0.8.0` used to fail inside checkout with "couldn't find remote ref"). The repositories input is
   gone: the list comes from the `ROLLOUT_REPOS` variable on the `rollout` environment, and
   repositories already onboarded are skipped. See `docs/rollout.md`.
+- `vstd rollout` and `vstd sync`: a refused `git push` now reports GitHub's reason (the
+  `remote:` and `! [remote rejected]` lines), not just "failed to push some refs".
 
 ## v0.8.0
 
