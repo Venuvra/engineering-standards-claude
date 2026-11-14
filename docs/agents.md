@@ -51,7 +51,8 @@ It needs no file from vstd. Two things to know:
 ## Assistant-specific notes
 
 Put notes for one assistant in the project section of `AGENTS.md` unless only that assistant
-should see them. `CLAUDE.md` below the import, `GEMINI.md` and `.agents/rules/` are fine for
+should see them. Plans, the stack and the design never go in an assistant-only file: they live in
+the shared `docs/architecture.md`, `docs/adr/` and `docs/plans/` (see `docs/planning.md`). `CLAUDE.md` below the import, `GEMINI.md` and `.agents/rules/` are fine for
 assistant-only notes, but `vstd check` fails if they contain rule ID lines such as
 `[SEC-001 MUST]`, and warns when they mention a MUST rule next to words like "skip" or
 "does not apply".

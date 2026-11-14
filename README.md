@@ -12,6 +12,7 @@ The generator and checker, `vstd`, use the Python 3.11+ standard library only.
 
 - [Adopting the standards in a repository](docs/adopting.md)
 - [Which file each AI assistant reads](docs/agents.md)
+- [Where planning lives](docs/planning.md)
 - [Rolling out across repositories](docs/rollout.md)
 - [Overrides](docs/overrides.md)
 - [Container test gate](docs/container-testing.md)
